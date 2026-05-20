@@ -125,10 +125,15 @@ class ApiService {
   }
 
   async checkHealth(): Promise<boolean> {
-    try {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/health`, {}, 3_000);
-      return response.ok;
-    } catch { return false; }
+    // Try up to 2 times — first attempt often hits Cloud Run cold start
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await this.fetchWithTimeout(`${this.baseUrl}/health`, {}, 10_000);
+        if (response.ok) return true;
+      } catch { /* timeout or network error — retry */ }
+      if (attempt === 0) await new Promise(r => setTimeout(r, 1500)); // brief pause before retry
+    }
+    return false;
   }
 
   // ─── Providers ────────────────────────────────────────────────
