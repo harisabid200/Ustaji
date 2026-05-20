@@ -43,8 +43,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true); // Start true to wait for Firebase
 
+  // Flag to skip onAuthStateChanged when signup handles state directly
+  const signupInProgress = React.useRef(false);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // If signup is handling state, don't interfere
+      if (signupInProgress.current) {
+        setIsLoading(false);
+        return;
+      }
+      
       if (firebaseUser) {
         // Load role and name from AsyncStorage
         const roleData = await AsyncStorage.getItem(`@role_${firebaseUser.uid}`);
@@ -84,15 +93,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(async (email: string, pass: string, name: string, role: UserRole) => {
     setIsLoading(true);
+    signupInProgress.current = true;
     try {
       const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, pass);
+      
+      // Write to AsyncStorage FIRST (before onAuthStateChanged can read it)
       await AsyncStorage.setItem(`@role_${firebaseUser.uid}`, role);
       await AsyncStorage.setItem(`@name_${firebaseUser.uid}`, name);
       await AsyncStorage.setItem(`@new_${firebaseUser.uid}`, role === 'provider' ? 'true' : 'false');
-      // onAuthStateChanged will trigger and set the user
+      
+      // Set user state directly with the correct role (don't rely on onAuthStateChanged)
+      setUser({
+        id: firebaseUser.uid,
+        name,
+        email: firebaseUser.email || email,
+        role,
+        isNewUser: role === 'provider',
+      });
+      setIsLoading(false);
     } catch (e) {
       setIsLoading(false);
       throw e;
+    } finally {
+      signupInProgress.current = false;
     }
   }, []);
 
@@ -101,8 +124,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await signOut(auth);
   }, []);
 
-  const switchRole = useCallback((role: UserRole) => {
-    if (user) setUser({ ...user, role, isNewUser: role === 'provider' });
+  const switchRole = useCallback(async (role: UserRole) => {
+    if (!user) return;
+    // Persist to AsyncStorage so it survives app restart
+    await AsyncStorage.setItem(`@role_${user.id}`, role);
+    if (role === 'provider') {
+      const isNewData = await AsyncStorage.getItem(`@new_${user.id}`);
+      const isNew = isNewData !== 'false'; // Default to new if never onboarded
+      setUser({ ...user, role, isNewUser: isNew });
+    } else {
+      setUser({ ...user, role, isNewUser: false });
+    }
   }, [user]);
 
   const completeProviderOnboarding = useCallback(async (profile: ProviderProfile) => {

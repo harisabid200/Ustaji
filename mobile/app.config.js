@@ -36,7 +36,7 @@ module.exports = {
       // Makes the API URL available via expo-constants in older SDK versions
       apiUrl: process.env.EXPO_PUBLIC_API_URL || '',
       eas: {
-        projectId: 'your-eas-project-id',  // Set this after running: eas init
+        projectId: '7a36eb11-385a-4cc3-b995-67efd4be1f39',
       },
     },
     plugins: [
