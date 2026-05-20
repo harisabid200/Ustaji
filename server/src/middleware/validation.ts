@@ -16,7 +16,8 @@ export const ChatSchema = z.object({
 export const ProviderRegisterSchema = z.object({
   id: z.string().min(1).max(128),
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  phone: z.string().min(10).max(20),
+  // 'phone' now accepts email strings too (migrated from phone-OTP to email auth)
+  phone: z.string().min(3).max(200),
   service_types: z.array(z.string()).min(1, 'At least one service type required').max(10),
   experience_years: z.number().int().min(0).max(60),
   bio: z.string().max(500).optional(),
