@@ -13,11 +13,19 @@ import { getDB, isFirebaseAvailable } from '../services/firebase-admin';
 import { v4 as uuid } from 'uuid';
 
 
-function getOrCreateSession(sessionId: string | undefined, userId: string): ChatSession {
+async function getOrCreateSession(sessionId: string | undefined, userId: string): Promise<ChatSession> {
   const id = sessionId || uuid();
   // Check in-memory first (sync fast path)
   const existing = getSessionSync(id);
   if (existing) return existing;
+
+  // Fallback: check Firestore (survives Cloud Run cold starts)
+  const persisted = await fetchSession(id);
+  if (persisted) {
+    setSessionSync(id, persisted); // warm the in-memory cache
+    return persisted;
+  }
+
   // Create new session
   const session: ChatSession = {
     id, user_id: userId, messages: [], current_stage: 'greeting',
@@ -54,7 +62,7 @@ async function generateResponse(session: ChatSession, contextData: Record<string
 }
 
 export async function processChatMessage(message: string, sessionId: string | undefined, userId: string, userLocation?: any): Promise<ChatResponse> {
-  const session = getOrCreateSession(sessionId, userId);
+  const session = await getOrCreateSession(sessionId, userId);
   if (userLocation) session.user_location = userLocation;
   const traces: AgentTrace[] = [];
 
@@ -97,6 +105,7 @@ export async function processChatMessage(message: string, sessionId: string | un
       // Add assistant message
       session.messages.push({ id: uuid(), role: 'assistant', content: reply, timestamp: new Date().toISOString(), metadata: { stage, booking, traces } });
       session.updated_at = new Date().toISOString();
+      saveSession(session).catch(() => {});
 
       return { reply, session_id: session.id, stage, reasoning_traces: traces, booking, actions, confidence: 1.0 };
     }
@@ -109,6 +118,7 @@ export async function processChatMessage(message: string, sessionId: string | un
     session.current_stage = 'greeting';
     actions = ['new_request'];
     session.messages.push({ id: uuid(), role: 'assistant', content: reply, timestamp: new Date().toISOString() });
+    saveSession(session).catch(() => {});
     return { reply, session_id: session.id, stage, reasoning_traces: [], actions, confidence: 1.0 };
   }
 
@@ -148,6 +158,7 @@ export async function processChatMessage(message: string, sessionId: string | un
 
       session.messages.push({ id: uuid(), role: 'assistant', content: reply, timestamp: new Date().toISOString(), metadata: { stage, nlu_result: nluResult, traces } });
       session.updated_at = new Date().toISOString();
+      saveSession(session).catch(() => {});
       return { reply, session_id: session.id, stage, nlu_result: nluResult, reasoning_traces: traces, actions, confidence: nluResult.confidence_score };
     }
 
@@ -160,6 +171,7 @@ export async function processChatMessage(message: string, sessionId: string | un
       reply = '😔 Is waqt is area mein koi provider available nahi hai. Kya aap time ya area change karna chahenge?';
       actions = ['change_time', 'expand_area', 'waitlist'];
       session.messages.push({ id: uuid(), role: 'assistant', content: reply, timestamp: new Date().toISOString(), metadata: { stage, traces } });
+      saveSession(session).catch(() => {});
       return { reply, session_id: session.id, stage, reasoning_traces: traces, actions, confidence: 0.3 };
     }
 
@@ -262,6 +274,8 @@ export async function processChatMessage(message: string, sessionId: string | un
   reply = await generateResponse(session, { stage, message });
   if (!reply) reply = 'Kaise madad kar sakta hoon? Service ki zaroorat ho to batayein! 😊';
   session.messages.push({ id: uuid(), role: 'assistant', content: reply, timestamp: new Date().toISOString() });
+  session.updated_at = new Date().toISOString();
+  saveSession(session).catch(() => {}); // Persist context to Firestore
 
   return { reply, session_id: session.id, stage, reasoning_traces: traces, actions: ['new_request'], confidence: 0.5 };
 }
