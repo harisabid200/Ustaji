@@ -80,7 +80,11 @@ const extractServiceIntentSchema: Schema = {
     detected_language: {
       type: SchemaType.STRING,
       description: "en | ur | roman_ur | mixed",
-    }
+    },
+    max_budget: {
+      type: SchemaType.NUMBER,
+      description: "Explicit maximum budget in PKR if user mentions a specific number, e.g. 3000, 5000. Extract from patterns like '3000 rupay', 'budget 5000', '2000 ke andar'. Set to 0 or omit if no budget number mentioned.",
+    },
   },
   required: ["service_type", "location_raw", "location_confidence", "urgency", "budget_sensitivity", "issue_severity", "issue_description", "confidence_score", "detected_language"],
 };
@@ -139,6 +143,7 @@ ${hintedService ? `KEYWORD HINT: message likely relates to "${hintedService}"` :
           },
           constraints: {
             budget_sensitivity: (args.budget_sensitivity as any) || 'medium',
+            max_budget: (args.max_budget && args.max_budget > 0) ? args.max_budget : undefined,
             gender_preference: 'any'
           },
           issue_severity: (args.issue_severity as any) || 'medium',
@@ -221,6 +226,26 @@ function keywordFallbackNLU(message: string, hintedService: string | null): NLUR
   if (lowered.match(/sasta|budget|zyada nahi|kam paise|affordable/)) budget = 'high';
   else if (lowered.match(/best|premium|achha|quality/)) budget = 'low';
 
+  // Extract explicit max budget number from patterns like:
+  // "3000 rupay", "budget 5000", "5k ke andar", "under 2000", "max 4000"
+  let maxBudget: number | undefined = undefined;
+  const budgetPatterns = [
+    /(?:budget|max|upto|under|within|andar|tak|limit)\s*(?:rs\.?|pkr|rupay|rupee)?\s*(\d+)\s*(k|hazar|hazaar|thousand)?/i,
+    /(\d+)\s*(k|hazar|hazaar|thousand)?\s*(?:budget|rupay|rupee|rs\.?|pkr|ke\s*andar|mein|tak|max|se\s*kam|se\s*neeche)/i,
+  ];
+  for (const pattern of budgetPatterns) {
+    const m = lowered.match(pattern);
+    if (m) {
+      let num = parseInt(m[1]);
+      if (m[2] && /^(k|hazar|hazaar|thousand)$/i.test(m[2])) num *= 1000;
+      if (num >= 100 && num <= 500000) { // sanity bounds for PKR
+        maxBudget = num;
+        budget = 'high'; // explicit budget → automatically high sensitivity
+      }
+      break;
+    }
+  }
+
   let severity: NLUResult['issue_severity'] = 'medium';
   if (lowered.match(/bilkul|completely|emergency|nahi chal|band ho/)) severity = 'critical';
   else if (lowered.match(/nahi kar raha|not working|kharab/)) severity = 'high';
@@ -241,7 +266,7 @@ function keywordFallbackNLU(message: string, hintedService: string | null): NLUR
     service_type: (hintedService as ServiceCategory) || 'home_appliance',
     location: { raw: location, confidence: location ? 0.8 : 0.3 },
     time_preference: { urgency, preferred_slot: slot },
-    constraints: { budget_sensitivity: budget, gender_preference: 'any' },
+    constraints: { budget_sensitivity: budget, max_budget: maxBudget, gender_preference: 'any' },
     issue_severity: severity,
     issue_description: message.substring(0, 100),
     confidence_score: Math.min(confidence, 1.0),

@@ -91,7 +91,7 @@ export async function processChatMessage(message: string, sessionId: string | un
       };
       traces.push(bookTrace);
 
-      reply = `✅ Booking confirmed!\n\n📋 **Booking #${booking.id.slice(0, 8)}**\n👨‍🔧 ${booking.provider_name}\n📅 ${booking.scheduled_time}\n💰 Rs. ${booking.price.quoted}\n📍 ${booking.location.area || booking.location.formatted_address}\n\nAap ko confirmation SMS bhej diya gaya hai (simulated). Provider ko bhi notify kar diya! 📱`;
+      reply = `✅ Booking confirmed!\n\n📋 **Booking #${booking.id.slice(0, 8)}**\n👨‍🔧 ${booking.provider_name}\n📅 ${booking.scheduled_time}\n💰 PKR ${booking.price.quoted}\n📍 ${booking.location.area || booking.location.formatted_address}\n\nAap ko confirmation SMS bhej diya gaya hai (simulated). Provider ko bhi notify kar diya! 📱`;
       actions = ['track_booking', 'cancel_booking'];
 
       // Add assistant message
@@ -210,6 +210,13 @@ export async function processChatMessage(message: string, sessionId: string | un
       },
       top_provider: { name: finalProvider.provider.name, score: finalProvider.total_score, rating: finalProvider.provider.stats.avg_rating, distance_km: finalProvider.estimated_distance_km, risks: finalProvider.risk_flags, rationale: finalProvider.gemini_rationale },
       pricing: { total: pricingResult.primary_quote.total, breakdown: pricingResult.primary_quote, budget_alt: pricingResult.budget_alternative, provider_earnings: pricingResult.provider_earnings, demand_level: pricingResult.demand_level },
+      budget: {
+        max_budget: nluResult.constraints.max_budget || null,
+        over_budget: (pricingResult as any).over_budget || false,
+        quoted_total: pricingResult.primary_quote.total,
+        budget_alt_total: pricingResult.budget_alternative?.total || null,
+        budget_alt_name: pricingResult.budget_alternative?.provider_name || null,
+      },
       alternatives: ranked.slice(1, 3).map(r => ({ name: r.provider.name, score: r.total_score, rating: r.provider.stats.avg_rating })),
     };
 
@@ -217,7 +224,18 @@ export async function processChatMessage(message: string, sessionId: string | un
     if (!reply || reply.includes('error')) {
       const p = ranked[0].provider;
       const price = pricingResult.primary_quote;
-      reply = `🔍 Maine ${ranked.length} providers check kiye. Yeh raha best match:\n\n⭐ **${p.name}** (${p.stats.avg_rating}★)\n📍 ${ranked[0].estimated_distance_km}km door\n⏱️ ${p.stats.on_time_percentage}% on-time\n💰 Rs. ${price.total}\n\n📊 Price breakdown:\n• Base: Rs. ${price.base_rate}\n• Distance: Rs. ${price.distance_cost}\n• Total: Rs. ${price.total}\n\n${pricingResult.budget_alternative ? `\n💡 Budget option: ${pricingResult.budget_alternative.provider_name} @ Rs. ${pricingResult.budget_alternative.total}` : ''}\n\nBook karein? (Yes/Haan to confirm)`;
+      const overBudget = (pricingResult as any).over_budget;
+      const userBudget = nluResult.constraints.max_budget;
+
+      let budgetWarning = '';
+      if (overBudget && userBudget) {
+        budgetWarning = `\n\n⚠️ **Budget Alert:** Aap ka budget PKR ${userBudget.toLocaleString()} tha, lekin best provider ki quote PKR ${price.total.toLocaleString()} hai.`;
+        if (pricingResult.budget_alternative) {
+          budgetWarning += `\n💡 Budget option: **${pricingResult.budget_alternative.provider_name}** @ PKR ${pricingResult.budget_alternative.total.toLocaleString()} — budget ke andar!`;
+        }
+      }
+
+      reply = `🔍 Maine ${ranked.length} providers check kiye. Yeh raha best match:\n\n⭐ **${p.name}** (${p.stats.avg_rating}★)\n📍 ${ranked[0].estimated_distance_km}km door\n⏱️ ${p.stats.on_time_percentage}% on-time\n💰 PKR ${price.total}\n\n📊 Price breakdown:\n• Base: PKR ${price.base_rate}\n• Distance: PKR ${price.distance_cost}\n• Total: PKR ${price.total}${budgetWarning}\n${pricingResult.budget_alternative && !overBudget ? `\n💡 Budget option: ${pricingResult.budget_alternative.provider_name} @ PKR ${pricingResult.budget_alternative.total}` : ''}\n\nBook karein? (Yes/Haan to confirm)`;
     }
 
     actions = ['confirm_booking', 'change_provider', 'change_time', 'see_more_providers'];
@@ -277,7 +295,7 @@ function createBooking(session: ChatSession, userId: string): Booking {
     price: { quoted: pricing.primary_quote.total, breakdown: pricing.primary_quote, currency: 'PKR' },
     reasoning_traces: [],
     notifications: [
-      { id: uuid(), type: 'sms',      recipient: 'user',                 message: `UstaJi: ✅ ${nlu.service_type.replace(/_/g, ' ')} booking confirmed with ${provider.provider.name} on ${scheduledTime}. Rs.${pricing.primary_quote.total}`, status: 'sent', timestamp: new Date().toISOString() },
+      { id: uuid(), type: 'sms',      recipient: 'user',                 message: `UstaJi: ✅ ${nlu.service_type.replace(/_/g, ' ')} booking confirmed with ${provider.provider.name} on ${scheduledTime}. PKR ${pricing.primary_quote.total}`, status: 'sent', timestamp: new Date().toISOString() },
       { id: uuid(), type: 'whatsapp', recipient: provider.provider.phone, message: `📋 New job: ${nlu.service_type} at ${nlu.location.raw} on ${scheduledTime}. Client location: ${nlu.location.resolved?.formatted_address || nlu.location.raw}`, status: 'sent', timestamp: new Date().toISOString() },
       { id: uuid(), type: 'push',     recipient: 'user',                 message: `Booking confirmed! ${provider.provider.name} will arrive at ${slot?.start_time || '10:00'}`, status: 'sent', timestamp: new Date().toISOString() },
     ],

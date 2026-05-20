@@ -127,17 +127,23 @@ export function runPricingAgent(
   const primaryQuote = buildPriceBreakdown(primary, nlu, complexity, userBookingCount);
 
   // Budget alternative: cheapest option from remaining providers
+  // Triggered when: user explicitly set a budget OR has high budget sensitivity
   let budgetAlt: PricingResult['budget_alternative'] = undefined;
-  if (nlu.constraints.budget_sensitivity === 'high' && rankedProviders.length > 1) {
+  const needsBudgetAlt = (nlu.constraints.max_budget || nlu.constraints.budget_sensitivity === 'high') && rankedProviders.length > 1;
+  if (needsBudgetAlt) {
     const cheapest = rankedProviders.slice(1).reduce((min, p) => {
       const q = buildPriceBreakdown(p, nlu, complexity, userBookingCount);
       return q.total < buildPriceBreakdown(min, nlu, complexity, userBookingCount).total ? p : min;
     }, rankedProviders[1]);
     const cheapQuote = buildPriceBreakdown(cheapest, nlu, complexity, userBookingCount);
-    if (cheapQuote.total < primaryQuote.total) {
+    // Show budget alt if it's cheaper than primary, or if primary exceeds user's budget
+    if (cheapQuote.total < primaryQuote.total || (nlu.constraints.max_budget && primaryQuote.total > nlu.constraints.max_budget)) {
       budgetAlt = { ...cheapQuote, provider_id: cheapest.provider.id, provider_name: cheapest.provider.name };
     }
   }
+
+  // Over-budget detection
+  const overBudget = !!(nlu.constraints.max_budget && primaryQuote.total > nlu.constraints.max_budget);
 
   // Fairness: how close is the price to market average?
   const market = MARKET_RATES[nlu.service_type] || 2000;
@@ -149,10 +155,10 @@ export function runPricingAgent(
   const reasonParts = [
     `${level} complexity (×${primaryQuote.complexity_multiplier})`,
     `${nlu.time_preference.urgency} urgency (×${primaryQuote.urgency_factor})`,
-    `${primary.estimated_distance_km}km travel (+Rs.${primaryQuote.distance_cost})`,
-    primaryQuote.surge_premium > 0 ? `surge +Rs.${primaryQuote.surge_premium}` : '',
-    primaryQuote.loyalty_discount > 0 ? `loyalty -Rs.${primaryQuote.loyalty_discount}` : '',
-    primaryQuote.material_estimate > 0 ? `materials +Rs.${primaryQuote.material_estimate}` : '',
+    `${primary.estimated_distance_km}km travel (+PKR ${primaryQuote.distance_cost})`,
+    primaryQuote.surge_premium > 0 ? `surge +PKR ${primaryQuote.surge_premium}` : '',
+    primaryQuote.loyalty_discount > 0 ? `loyalty -PKR ${primaryQuote.loyalty_discount}` : '',
+    primaryQuote.material_estimate > 0 ? `materials +PKR ${primaryQuote.material_estimate}` : '',
   ].filter(Boolean).join(', ');
 
   const result: PricingResult = {
@@ -162,7 +168,9 @@ export function runPricingAgent(
     reasoning: reasonParts,
     provider_earnings: providerEarnings,
     demand_level: primaryQuote.surge_premium > 200 ? 'high' : primaryQuote.surge_premium > 0 ? 'medium' : 'low',
-  } as PricingResult & { provider_earnings: number; demand_level: string };
+    over_budget: overBudget,
+    user_budget: nlu.constraints.max_budget || undefined,
+  } as PricingResult & { provider_earnings: number; demand_level: string; over_budget: boolean; user_budget?: number };
 
   const trace: AgentTrace = {
     id: uuid(), agent: 'PricingAgent', step: 'price_calculation',
@@ -184,7 +192,7 @@ export function runPricingAgent(
       has_budget_alternative: !!budgetAlt,
       user_loyalty_bookings: userBookingCount,
     },
-    decision: `Quoted Rs.${primaryQuote.total}${budgetAlt ? ` | Budget option: Rs.${budgetAlt.total} with ${budgetAlt.provider_name}` : ''} | Provider earns Rs.${providerEarnings}`,
+    decision: `Quoted PKR ${primaryQuote.total}${budgetAlt ? ` | Budget option: PKR ${budgetAlt.total} with ${budgetAlt.provider_name}` : ''} | Provider earns PKR ${providerEarnings}`,
     confidence: 0.85,
     action: 'present_pricing',
     timestamp: new Date().toISOString(),

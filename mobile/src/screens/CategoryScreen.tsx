@@ -122,7 +122,7 @@ export default function CategoryScreen({ route, navigation }: any) {
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>📍 {item.area ?? 'Islamabad'}</Text>
             {item.base_rate && (
-              <Text style={styles.metaText}>💰 From Rs. {item.base_rate?.toLocaleString()}</Text>
+              <Text style={styles.metaText}>💰 From PKR {item.base_rate?.toLocaleString()}</Text>
             )}
           </View>
         </View>

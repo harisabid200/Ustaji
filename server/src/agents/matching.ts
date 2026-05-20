@@ -163,13 +163,13 @@ function scorePrice(provider: Provider, nlu: NLUResult): { score: number; label:
 
   let score: number, label: string;
   if (nlu.constraints.budget_sensitivity === 'high') {
-    if (ratio < 0.8)       { score = 10; label = `Budget-friendly — Rs.${Math.round(avgRate)} (${Math.round((1-ratio)*100)}% below market)`; }
-    else if (ratio < 1.0)  { score = 7;  label = `Affordable — Rs.${Math.round(avgRate)}`; }
-    else if (ratio < 1.3)  { score = 4;  label = `Above average — Rs.${Math.round(avgRate)}`; }
-    else                   { score = 2;  label = `Expensive — Rs.${Math.round(avgRate)} (${Math.round((ratio-1)*100)}% above market)`; }
+    if (ratio < 0.8)       { score = 10; label = `Budget-friendly — PKR ${Math.round(avgRate)} (${Math.round((1-ratio)*100)}% below market)`; }
+    else if (ratio < 1.0)  { score = 7;  label = `Affordable — PKR ${Math.round(avgRate)}`; }
+    else if (ratio < 1.3)  { score = 4;  label = `Above average — PKR ${Math.round(avgRate)}`; }
+    else                   { score = 2;  label = `Expensive — PKR ${Math.round(avgRate)} (${Math.round((ratio-1)*100)}% above market)`; }
   } else {
     score = ratio < 1.2 ? 8 : 5;
-    label = `Rs.${Math.round(avgRate)} vs market avg Rs.${market}`;
+    label = `PKR ${Math.round(avgRate)} vs market avg PKR ${market}`;
   }
   return { score, label };
 }
@@ -274,6 +274,18 @@ export async function runMatchingAgent(
   const userLat = contextLat ?? nlu.location.resolved?.lat ?? 33.6651;
   const userLng = contextLng ?? nlu.location.resolved?.lng ?? 72.9648;
 
+  // ── Dynamic weight adjustment when user specifies a budget ─────
+  // Double the price weight so budget-friendly providers rank higher
+  const dynamicWeights = { ...WEIGHTS };
+  if (nlu.constraints.max_budget) {
+    const priceBoost = dynamicWeights.price; // 0.09
+    dynamicWeights.price = priceBoost * 2;   // 0.18
+    // Redistribute the extra weight from lower-priority factors
+    dynamicWeights.review_recency -= priceBoost * 0.4;
+    dynamicWeights.user_preference -= priceBoost * 0.3;
+    dynamicWeights.risk_score -= priceBoost * 0.3;
+  }
+
   // ── Score every candidate on all 11 factors ─────────────────
   const ranked: RankedProvider[] = candidates.map(provider => {
     const distResult   = scoreDistance(provider, userLat, userLng);
@@ -316,8 +328,8 @@ export async function runMatchingAgent(
       risk_score:      riskResult.label,
     };
 
-    // Weighted total (each factor: 0-10, weight sums to 1.0 → total max 100)
-    const total = Object.entries(WEIGHTS).reduce((sum, [key, weight]) => {
+    // Weighted total (each factor: 0-10, weight sums to ~1.0 → total max ~100)
+    const total = Object.entries(dynamicWeights).reduce((sum, [key, weight]) => {
       return sum + (breakdown[key as keyof MatchingFactorScore]) * weight * 10;
     }, 0);
 
@@ -332,9 +344,36 @@ export async function runMatchingAgent(
     };
   }).sort((a, b) => b.total_score - a.total_score);
 
+  // ── Hard-cap budget filter ──────────────────────────────────────
+  // If user specified a max budget, remove providers whose base rate
+  // clearly exceeds it. We allow 20% tolerance since pricing agent
+  // applies complexity/urgency multipliers later.
+  let filteredRanked = ranked;
+  if (nlu.constraints.max_budget) {
+    const budget = nlu.constraints.max_budget;
+    filteredRanked = ranked.filter(r => {
+      const rates = Object.values(r.provider.rate_card);
+      if (rates.length === 0) return true; // no rate info → keep
+      const minRate = Math.min(...rates);
+      return minRate <= budget * 1.3; // 30% tolerance for multipliers
+    });
+    // If all providers got filtered out, keep the top 2 cheapest anyway
+    if (filteredRanked.length === 0) {
+      filteredRanked = ranked
+        .sort((a, b) => {
+          const aRates = Object.values(a.provider.rate_card);
+          const bRates = Object.values(b.provider.rate_card);
+          const aMin = aRates.length > 0 ? Math.min(...aRates) : Infinity;
+          const bMin = bRates.length > 0 ? Math.min(...bRates) : Infinity;
+          return aMin - bMin;
+        })
+        .slice(0, 2);
+    }
+  }
+
   // ── Gemini reasoning over full factor breakdown ─────────────
-  const top = ranked[0];
-  const runner = ranked[1];
+  const top = filteredRanked[0];
+  const runner = filteredRanked[1];
   let rationale = 'No providers available to compare.';
 
   if (top) {
@@ -384,19 +423,21 @@ Be honest, specific, and use actual numbers. Do NOT use markdown or bullet point
     }
 
     // Attach rationale to top provider
-    ranked[0] = { ...ranked[0], gemini_rationale: rationale };
+    filteredRanked[0] = { ...filteredRanked[0], gemini_rationale: rationale };
   }
 
   const trace: AgentTrace = {
     id: uuid(),
     agent: 'MatchingAgent',
     step: 'provider_ranking',
-    observation: `Evaluated ${candidates.length} providers for ${nlu.service_type} near ${city} (${userLat.toFixed(4)},${userLng.toFixed(4)})`,
+    observation: `Evaluated ${candidates.length} providers for ${nlu.service_type} near ${city} (${userLat.toFixed(4)},${userLng.toFixed(4)})${nlu.constraints.max_budget ? ` [Budget: PKR ${nlu.constraints.max_budget}]` : ''}`,
     reasoning: {
       factors_used: Object.keys(WEIGHTS),
-      weights: WEIGHTS,
+      weights: dynamicWeights,
       candidates_evaluated: candidates.length,
-      top_3: ranked.slice(0, 3).map(r => ({
+      budget_filtered: nlu.constraints.max_budget ? `${candidates.length} → ${filteredRanked.length}` : 'none',
+      max_budget: nlu.constraints.max_budget || null,
+      top_3: filteredRanked.slice(0, 3).map(r => ({
         name: r.provider.name,
         score: r.total_score,
         breakdown: r.breakdown,
@@ -407,11 +448,11 @@ Be honest, specific, and use actual numbers. Do NOT use markdown or bullet point
     },
     decision: rationale,
     confidence: top ? Math.min(0.99, top.total_score / 100 + 0.05) : 0.1,
-    action: ranked.length > 0 ? 'present_providers' : 'no_provider_available',
+    action: filteredRanked.length > 0 ? 'present_providers' : 'no_provider_available',
     timestamp: new Date().toISOString(),
   };
 
-  return { ranked, trace };
+  return { ranked: filteredRanked, trace };
 }
 
 // ── Fallback rationale (no Gemini) ────────────────────────────

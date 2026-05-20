@@ -219,7 +219,7 @@ export default function ProviderOnboardingScreen() {
           <View key={svc} style={styles.rateRow}>
             <Text style={styles.rateLabel}>{svcInfo?.icon} {svcInfo?.label}</Text>
             <View style={styles.rateInputWrap}>
-              <Text style={styles.ratePrefix}>Rs.</Text>
+              <Text style={styles.ratePrefix}>PKR</Text>
               <TextInput
                 style={styles.rateInput}
                 placeholder={String(suggested)}
@@ -271,7 +271,7 @@ export default function ProviderOnboardingScreen() {
         <SummaryRow icon="🔧" label="Services" value={selectedServices.map(s => ALL_SERVICES.find(a => a.id === s)?.label).join(', ')} />
         <SummaryRow icon="📍" label="Area" value={specificArea ? `${specificArea}, ${city}` : city} />
         <SummaryRow icon="⏰" label="Availability" value={selectedDays.join(', ')} />
-        <SummaryRow icon="💰" label="Base Rate" value={`Rs. ${Math.min(...selectedServices.map(s => parseInt(rates[s] || String(DEFAULT_RATES[s] ?? 2000))))} onwards`} />
+        <SummaryRow icon="💰" label="Base Rate" value={`PKR ${Math.min(...selectedServices.map(s => parseInt(rates[s] || String(DEFAULT_RATES[s] ?? 2000))))} onwards`} />
       </View>
       <Text style={styles.doneNote}>
         ⚙️ Your profile will be reviewed by UstaJi within 24 hours before going live.

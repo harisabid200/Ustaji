@@ -128,7 +128,7 @@ export default function ProviderScheduleScreen() {
           <Text style={styles.service}>{item.service}</Text>
           <Text style={styles.client}>👤 {item.client}</Text>
           <Text style={styles.area}>📍 {item.area}</Text>
-          <Text style={styles.price}>Rs. {item.price.toLocaleString()}</Text>
+          <Text style={styles.price}>PKR {item.price.toLocaleString()}</Text>
           <View style={[styles.statusBadge, { backgroundColor: color + '20' }]}>
             <Text style={[styles.statusText, { color }]}>{STATUS_LABELS[item.status]}</Text>
           </View>

@@ -41,7 +41,7 @@ export default function ProviderEarningsScreen() {
         <View style={styles.summaryRow}>
           <View style={[styles.summaryCard, { backgroundColor: COLORS.successBg }]}>
             <Text style={styles.summaryIcon}>💰</Text>
-            <Text style={styles.summaryValue}>Rs. {weeklyTotal.toLocaleString()}</Text>
+            <Text style={styles.summaryValue}>PKR {weeklyTotal.toLocaleString()}</Text>
             <Text style={styles.summaryLabel}>This Week</Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: '#F5F3FF' }]}>
