@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────
+# .dockerignore — Files excluded from the Docker build context
+# ─────────────────────────────────────────────────────────────────
+
+# Dependencies (re-installed inside the container)
+node_modules/
+
+# TypeScript compiled output (rebuilt inside container)
+dist/
+
+# Secrets — NEVER bake these into a Docker image
+.env
+.env.*
+firebase-service-account.json
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# Development files
+check-firestore.ts
+*.test.ts
+
+# OS / Editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Git history
+.git/
+.gitignore
