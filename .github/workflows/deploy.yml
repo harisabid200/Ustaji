@@ -57,6 +57,7 @@ jobs:
           GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT_BASE64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
           NODE_ENV=production
+          ALLOWED_ORIGINS=*
 
     - name: Output Cloud Run URL
       run: echo "Deployed URL - ${{ steps.deploy.outputs.url }}"
