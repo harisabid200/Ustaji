@@ -6,10 +6,7 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_API_URL": ""
-      }
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
@@ -17,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": ""
+        "EXPO_PUBLIC_API_URL": "https://ustaji-api-7j65dn7nwa-uc.a.run.app"
       }
     },
     "production": {
@@ -26,7 +23,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": ""
+        "EXPO_PUBLIC_API_URL": "https://ustaji-api-7j65dn7nwa-uc.a.run.app"
       }
     }
   },

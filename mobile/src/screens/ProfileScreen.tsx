@@ -47,7 +47,7 @@ export default function ProfileScreen({ navigation }: any) {
             <Text style={styles.avatarInitial}>{(user?.name ?? 'G')[0]}</Text>
           </View>
           <Text style={styles.name}>{user?.name}</Text>
-          <Text style={styles.phone}>📱 +92 {user?.phone}</Text>
+          <Text style={styles.phone}>📧 {user?.email ?? 'Not set'}</Text>
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>👤 User Account</Text>
           </View>

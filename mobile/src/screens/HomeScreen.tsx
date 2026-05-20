@@ -5,13 +5,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  TextInput,
   ScrollView,
   Pressable,
   StyleSheet,
   StatusBar,
   SafeAreaView,
-  FlatList,
   ActivityIndicator,
 } from 'react-native';
 import { COLORS, SPACING, RADIUS, FONT, SHADOW } from '../theme';
