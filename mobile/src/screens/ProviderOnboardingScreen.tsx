@@ -119,165 +119,176 @@ export default function ProviderOnboardingScreen() {
     // Navigator auto-switches to ProviderTabs once isNewUser = false
   };
 
-  // ─── Step Renders ──────────────────────────────────────────
+  // ─── Step Renders (inline to prevent unmount/remount on re-render) ──
 
-  const Step1Services = () => (
-    <View style={styles.stepBody}>
-      <Text style={styles.stepTitle}>What services do you offer?</Text>
-      <Text style={styles.stepSubtitle}>Select all that apply. You can update this later.</Text>
-      <View style={styles.serviceGrid}>
-        {ALL_SERVICES.map(svc => {
-          const selected = selectedServices.includes(svc.id);
-          return (
-            <Pressable
-              key={svc.id}
-              style={[styles.serviceChip, selected && styles.serviceChipSelected]}
-              onPress={() => toggleService(svc.id)}
-            >
-              <Text style={styles.serviceChipIcon}>{svc.icon}</Text>
-              <Text style={[styles.serviceChipLabel, selected && styles.serviceChipLabelSelected]}>
-                {svc.label}
-              </Text>
-              {selected && <Text style={styles.serviceChipCheck}>✓</Text>}
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-
-  const Step2Location = () => (
-    <View style={styles.stepBody}>
-      <Text style={styles.stepTitle}>Where do you work?</Text>
-      <Text style={styles.stepSubtitle}>Your primary service location in Pakistan.</Text>
-
-      <Text style={styles.fieldLabel}>City *</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.areaScroll}>
-        <View style={styles.areaChips}>
-          {CITIES.map(c => (
-            <Pressable
-              key={c}
-              style={[styles.areaChip, city === c && styles.areaChipSelected]}
-              onPress={() => setCity(c)}
-            >
-              <Text style={[styles.areaChipText, city === c && styles.areaChipTextSelected]}>{c}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
-      {city !== '' && <Text style={styles.selectedArea}>📍 Selected City: {city}</Text>}
-
-      <Text style={[styles.fieldLabel, { marginTop: SPACING.lg }]}>Specific Area / Sector (Optional)</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. G-13, DHA Phase 5, Clifton"
-        placeholderTextColor={COLORS.placeholder}
-        value={specificArea}
-        onChangeText={setSpecificArea}
-      />
-
-      <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Years of Experience *</Text>
-      <View style={styles.expRow}>
-        {EXPERIENCE_OPTIONS.map(opt => (
-          <Pressable
-            key={opt.value}
-            style={[styles.expChip, experienceYears === opt.value && styles.expChipSelected]}
-            onPress={() => setExperienceYears(opt.value)}
-          >
-            <Text style={[styles.expChipText, experienceYears === opt.value && styles.expChipTextSelected]}>
-              {opt.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Short Bio (optional)</Text>
-      <TextInput
-        style={styles.textArea}
-        placeholder={`e.g. "10 years experience in AC repair, licensed technician, serving G-sector Islamabad"`}
-        placeholderTextColor={COLORS.placeholder}
-        value={bio}
-        onChangeText={setBio}
-        multiline
-        numberOfLines={3}
-        maxLength={250}
-      />
-    </View>
-  );
-
-  const Step3Rates = () => (
-    <View style={styles.stepBody}>
-      <Text style={styles.stepTitle}>Set your base rates</Text>
-      <Text style={styles.stepSubtitle}>
-        These are your starting rates (PKR). Leave blank to use suggested rates.
-      </Text>
-
-      {selectedServices.map(svc => {
-        const svcInfo = ALL_SERVICES.find(s => s.id === svc);
-        const suggested = DEFAULT_RATES[svc] ?? 2000;
+  const renderStep = () => {
+    switch (step) {
+      case 1:
         return (
-          <View key={svc} style={styles.rateRow}>
-            <Text style={styles.rateLabel}>{svcInfo?.icon} {svcInfo?.label}</Text>
-            <View style={styles.rateInputWrap}>
-              <Text style={styles.ratePrefix}>PKR</Text>
-              <TextInput
-                style={styles.rateInput}
-                placeholder={String(suggested)}
-                placeholderTextColor={COLORS.placeholder}
-                value={rates[svc] ?? ''}
-                onChangeText={val => setRates(prev => ({ ...prev, [svc]: val.replace(/\D/g, '') }))}
-                keyboardType="numeric"
-                maxLength={6}
-              />
+          <View style={styles.stepBody}>
+            <Text style={styles.stepTitle}>What services do you offer?</Text>
+            <Text style={styles.stepSubtitle}>Select all that apply. You can update this later.</Text>
+            <View style={styles.serviceGrid}>
+              {ALL_SERVICES.map(svc => {
+                const selected = selectedServices.includes(svc.id);
+                return (
+                  <Pressable
+                    key={svc.id}
+                    style={[styles.serviceChip, selected && styles.serviceChipSelected]}
+                    onPress={() => toggleService(svc.id)}
+                  >
+                    <Text style={styles.serviceChipIcon}>{svc.icon}</Text>
+                    <Text style={[styles.serviceChipLabel, selected && styles.serviceChipLabelSelected]}>
+                      {svc.label}
+                    </Text>
+                    {selected && <Text style={styles.serviceChipCheck}>✓</Text>}
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         );
-      })}
 
-      <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Working Days *</Text>
-      <View style={styles.dayRow}>
-        {DAYS.map(day => (
-          <Pressable
-            key={day}
-            style={[styles.dayChip, selectedDays.includes(day) && styles.dayChipSelected]}
-            onPress={() => toggleDay(day)}
-          >
-            <Text style={[styles.dayChipText, selectedDays.includes(day) && styles.dayChipTextSelected]}>
-              {day}
+      case 2:
+        return (
+          <View style={styles.stepBody}>
+            <Text style={styles.stepTitle}>Where do you work?</Text>
+            <Text style={styles.stepSubtitle}>Your primary service location in Pakistan.</Text>
+
+            <Text style={styles.fieldLabel}>City *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.areaScroll}>
+              <View style={styles.areaChips}>
+                {CITIES.map(c => (
+                  <Pressable
+                    key={c}
+                    style={[styles.areaChip, city === c && styles.areaChipSelected]}
+                    onPress={() => setCity(c)}
+                  >
+                    <Text style={[styles.areaChipText, city === c && styles.areaChipTextSelected]}>{c}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+            {city !== '' && <Text style={styles.selectedArea}>📍 Selected City: {city}</Text>}
+
+            <Text style={[styles.fieldLabel, { marginTop: SPACING.lg }]}>Specific Area / Sector (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. G-13, DHA Phase 5, Clifton"
+              placeholderTextColor={COLORS.placeholder}
+              value={specificArea}
+              onChangeText={setSpecificArea}
+            />
+
+            <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Years of Experience *</Text>
+            <View style={styles.expRow}>
+              {EXPERIENCE_OPTIONS.map(opt => (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.expChip, experienceYears === opt.value && styles.expChipSelected]}
+                  onPress={() => setExperienceYears(opt.value)}
+                >
+                  <Text style={[styles.expChipText, experienceYears === opt.value && styles.expChipTextSelected]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Short Bio (optional)</Text>
+            <TextInput
+              style={styles.textArea}
+              placeholder={`e.g. "10 years experience in AC repair, licensed technician, serving G-sector Islamabad"`}
+              placeholderTextColor={COLORS.placeholder}
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              numberOfLines={3}
+              maxLength={250}
+            />
+          </View>
+        );
+
+      case 3:
+        return (
+          <View style={styles.stepBody}>
+            <Text style={styles.stepTitle}>Set your base rates</Text>
+            <Text style={styles.stepSubtitle}>
+              These are your starting rates (PKR). Leave blank to use suggested rates.
             </Text>
-          </Pressable>
-        ))}
-      </View>
 
-      <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Certifications (optional)</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. SSGC Certified, PEC Licensed (comma-separated)"
-        placeholderTextColor={COLORS.placeholder}
-        value={certifications}
-        onChangeText={setCertifications}
-      />
-    </View>
-  );
+            {selectedServices.map(svc => {
+              const svcInfo = ALL_SERVICES.find(s => s.id === svc);
+              const suggested = DEFAULT_RATES[svc] ?? 2000;
+              return (
+                <View key={svc} style={styles.rateRow}>
+                  <Text style={styles.rateLabel}>{svcInfo?.icon} {svcInfo?.label}</Text>
+                  <View style={styles.rateInputWrap}>
+                    <Text style={styles.ratePrefix}>PKR</Text>
+                    <TextInput
+                      style={styles.rateInput}
+                      placeholder={String(suggested)}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={rates[svc] ?? ''}
+                      onChangeText={val => setRates(prev => ({ ...prev, [svc]: val.replace(/\D/g, '') }))}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                  </View>
+                </View>
+              );
+            })}
 
-  const Step4Done = () => (
-    <View style={[styles.stepBody, styles.doneStep]}>
-      <Text style={styles.doneEmoji}>🎉</Text>
-      <Text style={styles.doneTitle}>You're all set, {user?.name?.split(' ')[0]}!</Text>
-      <Text style={styles.doneSubtitle}>
-        Your provider profile is ready. You'll start receiving job opportunities that match your services and area.
-      </Text>
-      <View style={styles.summaryCard}>
-        <SummaryRow icon="🔧" label="Services" value={selectedServices.map(s => ALL_SERVICES.find(a => a.id === s)?.label).join(', ')} />
-        <SummaryRow icon="📍" label="Area" value={specificArea ? `${specificArea}, ${city}` : city} />
-        <SummaryRow icon="⏰" label="Availability" value={selectedDays.join(', ')} />
-        <SummaryRow icon="💰" label="Base Rate" value={`PKR ${Math.min(...selectedServices.map(s => parseInt(rates[s] || String(DEFAULT_RATES[s] ?? 2000))))} onwards`} />
-      </View>
-      <Text style={styles.doneNote}>
-        ⚙️ Your profile will be reviewed by UstaJi within 24 hours before going live.
-      </Text>
-    </View>
-  );
+            <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Working Days *</Text>
+            <View style={styles.dayRow}>
+              {DAYS.map(day => (
+                <Pressable
+                  key={day}
+                  style={[styles.dayChip, selectedDays.includes(day) && styles.dayChipSelected]}
+                  onPress={() => toggleDay(day)}
+                >
+                  <Text style={[styles.dayChipText, selectedDays.includes(day) && styles.dayChipTextSelected]}>
+                    {day}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginTop: SPACING.xl }]}>Certifications (optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. SSGC Certified, PEC Licensed (comma-separated)"
+              placeholderTextColor={COLORS.placeholder}
+              value={certifications}
+              onChangeText={setCertifications}
+            />
+          </View>
+        );
+
+      case 4:
+        return (
+          <View style={[styles.stepBody, styles.doneStep]}>
+            <Text style={styles.doneEmoji}>🎉</Text>
+            <Text style={styles.doneTitle}>You're all set, {user?.name?.split(' ')[0]}!</Text>
+            <Text style={styles.doneSubtitle}>
+              Your provider profile is ready. You'll start receiving job opportunities that match your services and area.
+            </Text>
+            <View style={styles.summaryCard}>
+              <SummaryRow icon="🔧" label="Services" value={selectedServices.map(s => ALL_SERVICES.find(a => a.id === s)?.label).join(', ')} />
+              <SummaryRow icon="📍" label="Area" value={specificArea ? `${specificArea}, ${city}` : city} />
+              <SummaryRow icon="⏰" label="Availability" value={selectedDays.join(', ')} />
+              <SummaryRow icon="💰" label="Base Rate" value={`PKR ${Math.min(...selectedServices.map(s => parseInt(rates[s] || String(DEFAULT_RATES[s] ?? 2000))))} onwards`} />
+            </View>
+            <Text style={styles.doneNote}>
+              ⚙️ Your profile will be reviewed by UstaJi within 24 hours before going live.
+            </Text>
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   const SummaryRow = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
     <View style={styles.summaryRow}>
@@ -311,10 +322,7 @@ export default function ProviderOnboardingScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {step === 1 && <Step1Services />}
-        {step === 2 && <Step2Location />}
-        {step === 3 && <Step3Rates />}
-        {step === 4 && <Step4Done />}
+        {renderStep()}
         <View style={{ height: SPACING.xxxl * 3 }} />
       </ScrollView>
 
