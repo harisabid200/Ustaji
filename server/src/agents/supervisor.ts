@@ -7,7 +7,7 @@ import { runSchedulingAgent } from './scheduling';
 import { callGemini } from '../services/gemini';
 import {
   saveSession, fetchSession, setSessionSync, getSessionSync,
-  saveBooking, getBookingSync, setBookingSync, getAllBookingsSync
+  saveBooking, fetchBooking, getBookingSync, setBookingSync, getAllBookingsSync, fetchUserBookings
 } from '../services/firestore-store';
 import { getDB, isFirebaseAvailable } from '../services/firebase-admin';
 import { v4 as uuid } from 'uuid';
@@ -319,8 +319,23 @@ function createBooking(session: ChatSession, userId: string): Booking {
 }
 
 // Export for routes
-export function getBooking(id: string): Booking | undefined { return getBookingSync(id); }
-export function getAllBookings(userId: string): Booking[] { return getAllBookingsSync(userId); }
+export async function getBooking(id: string): Promise<Booking | undefined> {
+  const inMem = getBookingSync(id);
+  if (inMem) return inMem;
+  const fromDb = await fetchBooking(id);
+  if (fromDb) { setBookingSync(id, fromDb); return fromDb; }
+  return undefined;
+}
+export async function getAllBookings(userId: string): Promise<Booking[]> {
+  // Check in-memory first
+  const inMem = getAllBookingsSync(userId);
+  if (inMem.length > 0) return inMem;
+  // Fallback to Firestore (survives Cloud Run cold starts)
+  const fromDb = await fetchUserBookings(userId);
+  // Warm the in-memory cache
+  for (const b of fromDb) setBookingSync(b.id, b);
+  return fromDb;
+}
 export function getSession(id: string): ChatSession | undefined { return getSessionSync(id); }
 
 export function updateBookingStatus(id: string, status: string): boolean {

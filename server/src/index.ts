@@ -201,13 +201,13 @@ app.post('/api/provider/register', registerLimiter, validate(ProviderRegisterSch
 }));
 
 // ── Bookings ──────────────────────────────────────────────────
-app.get('/api/bookings', (req, res) => {
+app.get('/api/bookings', async (req, res) => {
   const userId = (req.query.user_id as string) || 'demo-user';
-  res.json({ bookings: getAllBookings(userId) });
+  res.json({ bookings: await getAllBookings(userId) });
 });
 
-app.get('/api/bookings/:id', (req, res) => {
-  const booking = getBooking(req.params.id);
+app.get('/api/bookings/:id', async (req, res) => {
+  const booking = await getBooking(req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
   res.json(booking);
 });
