@@ -113,7 +113,7 @@ export default function ProviderDashboardScreen({ navigation }: any) {
           <View style={[styles.statCard, { backgroundColor: COLORS.successBg }]}>
             <Text style={styles.statIcon}>💰</Text>
             <Text style={styles.statValue}>
-              {todayStats.earnings > 0 ? `Rs. ${todayStats.earnings.toLocaleString()}` : '—'}
+              {todayStats.earnings > 0 ? `PKR ${todayStats.earnings.toLocaleString()}` : '—'}
             </Text>
             <Text style={styles.statLabel}>Today's Earnings</Text>
           </View>
@@ -182,7 +182,7 @@ export default function ProviderDashboardScreen({ navigation }: any) {
                   <Text style={styles.oppMetaText}>📍 {opp.area} ({opp.distance_km ?? opp.distance}km)</Text>
                   <Text style={styles.oppMetaText}>⏰ {opp.urgency}</Text>
                   <Text style={styles.oppMetaText}>
-                    💰 Est. Rs. {(opp.estimated_price ?? opp.price)?.toLocaleString()}
+                    💰 Est. PKR {(opp.estimated_price ?? opp.price)?.toLocaleString()}
                   </Text>
                 </View>
                 {opp.time_limit_seconds && (

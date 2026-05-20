@@ -93,7 +93,7 @@ export const ProviderCard = memo(function ProviderCard({
       <View style={styles.bottomRow}>
         {/* Price */}
         <View style={styles.priceBlock}>
-          <Text style={styles.price}>Rs. {provider.base_rate?.toLocaleString()}</Text>
+          <Text style={styles.price}>PKR {provider.base_rate?.toLocaleString()}</Text>
           <Text style={styles.priceLabel}>base rate</Text>
         </View>
 

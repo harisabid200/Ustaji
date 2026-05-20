@@ -38,7 +38,7 @@ export default function OpportunityScreen() {
         <Text style={styles.meta}>👤 {item.user}</Text>
         <Text style={styles.meta}>📍 {item.area} ({item.distance})</Text>
         <Text style={styles.meta}>⏰ {item.urgency}</Text>
-        <Text style={styles.meta}>💰 Est. Rs. {item.price.toLocaleString()}</Text>
+        <Text style={styles.meta}>💰 Est. PKR {item.price.toLocaleString()}</Text>
       </View>
 
       <View style={styles.timerRow}>

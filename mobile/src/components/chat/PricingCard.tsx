@@ -9,7 +9,7 @@ export const PricingCard = memo(function PricingCard({ pricing }: PricingCardPro
   // Server returns PricingResult with primary_quote not breakdown
   const quote = (pricing as any).primary_quote ?? pricing.breakdown;
   const finalPrice = (pricing as any).primary_quote?.total ?? pricing.final_price ?? 0;
-  const currency = pricing.currency ?? 'Rs.';
+  const currency = pricing.currency ?? 'PKR';
   const alternative = (pricing as any).budget_alternative ?? pricing.alternative;
   const demandLevel = (pricing as any).demand_level;
   const providerEarnings = (pricing as any).provider_earnings;

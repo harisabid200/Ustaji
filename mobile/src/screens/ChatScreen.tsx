@@ -113,7 +113,7 @@ export default function ChatScreen() {
         pricing: response.price_estimate ? {
           base_price: response.price_estimate.primary_quote?.base_rate || 0,
           final_price: response.price_estimate.primary_quote?.total || 0,
-          currency: 'Rs.',
+          currency: response.price_estimate.currency ?? 'PKR',
           breakdown: {
             base: response.price_estimate.primary_quote?.base_rate || 0,
             complexity_multiplier: response.price_estimate.primary_quote?.complexity_factor || 1,

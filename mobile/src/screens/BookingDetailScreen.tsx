@@ -129,7 +129,7 @@ export default function BookingDetailScreen({ route, navigation }: any) {
             <Text style={styles.scheduledTime}>📅 {booking.scheduled_time}</Text>
           </View>
           <View style={styles.priceBox}>
-            <Text style={styles.price}>Rs. {booking.price?.quoted?.toLocaleString()}</Text>
+            <Text style={styles.price}>PKR {booking.price?.quoted?.toLocaleString()}</Text>
             <Text style={styles.priceSub}>quoted</Text>
           </View>
         </View>
@@ -171,11 +171,11 @@ export default function BookingDetailScreen({ route, navigation }: any) {
             <Text style={styles.sectionTitle}>Price Breakdown</Text>
             <View style={styles.breakdownCard}>
               {[
-                ['Base Rate', `Rs. ${booking.price.breakdown.base_rate}`],
+                ['Base Rate', `PKR ${booking.price.breakdown.base_rate}`],
                 ['Complexity (×)', `${booking.price.breakdown.complexity_multiplier}x`],
                 ['Urgency (×)', `${booking.price.breakdown.urgency_factor}x`],
-                ['Distance', `Rs. ${booking.price.breakdown.distance_cost}`],
-                ['Materials', `Rs. ${booking.price.breakdown.material_estimate}`],
+                ['Distance', `PKR ${booking.price.breakdown.distance_cost}`],
+                ['Materials', `PKR ${booking.price.breakdown.material_estimate}`],
               ].map(([label, val]) => (
                 <View key={label} style={styles.breakdownRow}>
                   <Text style={styles.breakdownLabel}>{label}</Text>
@@ -184,7 +184,7 @@ export default function BookingDetailScreen({ route, navigation }: any) {
               ))}
               <View style={[styles.breakdownRow, styles.breakdownTotal]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>Rs. {booking.price.quoted?.toLocaleString()}</Text>
+                <Text style={styles.totalValue}>PKR {booking.price.quoted?.toLocaleString()}</Text>
               </View>
             </View>
           </View>

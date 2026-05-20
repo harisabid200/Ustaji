@@ -92,7 +92,7 @@ export default function BookingsScreen({ navigation }: any) {
               <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
             </View>
             {item.price?.quoted && (
-              <Text style={styles.price}>Rs. {item.price.quoted?.toLocaleString()}</Text>
+              <Text style={styles.price}>PKR {item.price.quoted?.toLocaleString()}</Text>
             )}
           </View>
         </View>
