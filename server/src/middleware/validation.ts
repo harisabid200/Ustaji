@@ -5,7 +5,7 @@ import { Request, Response, NextFunction } from 'express';
 
 export const ChatSchema = z.object({
   message: z.string().min(1, 'message cannot be empty').max(2000, 'message too long'),
-  session_id: z.string().optional(),
+  session_id: z.string().nullable().optional(),
   user_id: z.string().max(128).optional(),
   user_location: z.object({
     lat: z.number().min(-90).max(90),
