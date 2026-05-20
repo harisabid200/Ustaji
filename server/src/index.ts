@@ -25,7 +25,7 @@ app.use(helmet());
 // In production, restrict to deployed frontend origins.
 // In development, allow all origins so local Expo can connect.
 const allowedOrigins = IS_PROD
-  ? process.env.ALLOWED_ORIGINS === '*' 
+  ? (process.env.ALLOWED_ORIGINS === '*' || !process.env.ALLOWED_ORIGINS)
       ? '*' 
       : (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean)
   : true; // allow all in dev
