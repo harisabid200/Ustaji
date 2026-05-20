@@ -88,7 +88,7 @@ export default function BookingDetailScreen({ route, navigation }: any) {
         <Text style={styles.bookingId} numberOfLines={1}>#{bookingId?.slice(0, 6)}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ⚠️ Delay Banner — shown when provider reports running late */}
         {(isDelayed || delay) && delay && (

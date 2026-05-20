@@ -35,7 +35,7 @@ export default function ProviderProfileScreen({ route, navigation }: any) {
         <Text style={styles.headerTitle}>Provider Profile</Text>
         <View style={{ width: 40 }} />
       </View>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.avatar}><Text style={styles.avatarInitial}>{provider.name?.[0]}</Text></View>

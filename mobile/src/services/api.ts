@@ -114,7 +114,7 @@ class ApiService {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, user_id: userId, session_id: this.sessionId }),
+        body: JSON.stringify({ message, user_id: userId, session_id: this.sessionId || undefined }),
       },
       this.CHAT_TIMEOUT,
     );

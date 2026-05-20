@@ -72,6 +72,7 @@ export const ChatInput = memo(function ChatInput({
               ]}
               accessibilityRole="button"
               accessibilityLabel={`Quick reply: ${reply}`}
+              hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
             >
               <Text style={styles.quickChipText} numberOfLines={1}>{reply}</Text>
             </Pressable>

@@ -310,7 +310,7 @@ export default function ProviderOnboardingScreen() {
         <View style={[styles.progressBarFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {step === 1 && <Step1Services />}
         {step === 2 && <Step2Location />}
         {step === 3 && <Step3Rates />}

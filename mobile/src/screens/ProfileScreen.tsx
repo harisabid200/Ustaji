@@ -39,7 +39,7 @@ export default function ProfileScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg.primary} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* Profile header */}
         <View style={styles.profileHeader}>

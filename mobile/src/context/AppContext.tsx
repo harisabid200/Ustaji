@@ -1,36 +1,37 @@
-// AppContext — global user, role, auth state
-// Single source of truth for: who is logged in + are they a user or provider
-
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from '../services/firebase';
 
 export type UserRole = 'user' | 'provider';
 
 export interface ProviderProfile {
-  serviceTypes: string[];           // e.g. ['ac_repair', 'ac_installation']
-  area: string;                     // e.g. 'G-13, Islamabad'
+  serviceTypes: string[];           
+  area: string;                     
   experienceYears: number;
   bio: string;
-  rateCard: Record<string, number>; // service → base rate (PKR)
-  availability: string[];           // e.g. ['Mon', 'Tue', ...]
+  rateCard: Record<string, number>; 
+  availability: string[];           
   certifications: string[];
 }
 
 export interface AppUser {
   id: string;
   name: string;
-  phone: string;
+  email: string; // Used to be phone
   role: UserRole;
   avatar?: string;
-  isNewUser: boolean;               // true until they complete onboarding
-  providerProfile?: ProviderProfile; // only set for providers after onboarding
+  isNewUser: boolean;               
+  providerProfile?: ProviderProfile; 
 }
 
 interface AppContextValue {
   user: AppUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (phone: string, name: string, role: UserRole) => Promise<void>;
+  login: (email: string, pass: string) => Promise<void>;
+  signup: (email: string, pass: string, name: string, role: UserRole) => Promise<void>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   completeProviderOnboarding: (profile: ProviderProfile) => void;
@@ -40,48 +41,81 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start true to wait for Firebase
 
-  const login = useCallback(async (phone: string, name: string, role: UserRole) => {
-    setIsLoading(true);
-    // Simulate async auth (replace with Firebase Auth later)
-    await new Promise(r => setTimeout(r, 800));
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Load role and name from AsyncStorage
+        const roleData = await AsyncStorage.getItem(`@role_${firebaseUser.uid}`);
+        const nameData = await AsyncStorage.getItem(`@name_${firebaseUser.uid}`);
+        const isNewData = await AsyncStorage.getItem(`@new_${firebaseUser.uid}`);
+        
+        const role = (roleData as UserRole) || 'user';
+        const name = nameData || firebaseUser.email?.split('@')[0] || 'User';
+        const isNewUser = isNewData === 'true';
 
-    // In production: check Firestore for existing profile
-    // For now: treat every login as a new user (no localStorage/AsyncStorage yet)
-    const isNew = true; // TODO: check AsyncStorage/Firestore for existing profile
-
-    setUser({
-      id: `user-${phone.replace(/\D/g, '')}`,
-      name,
-      phone,
-      role,
-      isNewUser: isNew,
+        setUser({
+          id: firebaseUser.uid,
+          name,
+          email: firebaseUser.email || '',
+          role,
+          isNewUser,
+        });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
     });
-    setIsLoading(false);
+
+    return unsubscribe;
   }, []);
 
-  const logout = useCallback(() => {
-    setUser(null);
+  const login = useCallback(async (email: string, pass: string) => {
+    setIsLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+      // onAuthStateChanged will handle the rest
+    } catch (e) {
+      setIsLoading(false);
+      throw e;
+    }
+  }, []);
+
+  const signup = useCallback(async (email: string, pass: string, name: string, role: UserRole) => {
+    setIsLoading(true);
+    try {
+      const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, pass);
+      await AsyncStorage.setItem(`@role_${firebaseUser.uid}`, role);
+      await AsyncStorage.setItem(`@name_${firebaseUser.uid}`, name);
+      await AsyncStorage.setItem(`@new_${firebaseUser.uid}`, role === 'provider' ? 'true' : 'false');
+      // onAuthStateChanged will trigger and set the user
+    } catch (e) {
+      setIsLoading(false);
+      throw e;
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    setIsLoading(true);
+    await signOut(auth);
   }, []);
 
   const switchRole = useCallback((role: UserRole) => {
     if (user) setUser({ ...user, role, isNewUser: role === 'provider' });
   }, [user]);
 
-  /**
-   * Called after provider completes the onboarding wizard.
-   * Saves their profile to context (and in production, Firestore).
-   */
   const completeProviderOnboarding = useCallback(async (profile: ProviderProfile) => {
     if (!user) return;
+    
     setUser(prev => prev ? { ...prev, isNewUser: false, providerProfile: profile } : null);
+    await AsyncStorage.setItem(`@new_${user.id}`, 'false');
     
     try {
       await apiService.registerProvider({
         id: user.id,
         name: user.name,
-        phone: user.phone,
+        phone: user.email, // Backend still expects 'phone' field, map email to it for MVP
         service_types: profile.serviceTypes,
         location: { area: profile.area, city: profile.area.includes(',') ? profile.area.split(',')[1].trim() : 'Unknown' },
         experience_years: profile.experienceYears,
@@ -101,6 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isAuthenticated: user !== null,
       isLoading,
       login,
+      signup,
       logout,
       switchRole,
       completeProviderOnboarding,

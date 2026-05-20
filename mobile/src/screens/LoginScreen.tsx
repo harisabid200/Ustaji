@@ -1,6 +1,3 @@
-// LoginScreen — Phone auth + role selection
-// Light theme: white background, emerald CTAs, clean forms
-
 import React, { useState } from 'react';
 import {
   View,
@@ -34,33 +31,40 @@ const ROLE_OPTIONS: { role: UserRole; title: string; subtitle: string; icon: str
 ];
 
 export default function LoginScreen() {
-  const { login, isLoading } = useApp();
-  const [phone, setPhone] = useState('');
+  const { login, signup, isLoading } = useApp();
+  
+  const [mode, setMode] = useState<'login' | 'signup'>('signup');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [otp, setOtp] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('user');
-  const [step, setStep] = useState<'details' | 'otp'>('details');
   const [error, setError] = useState('');
 
-  const handleSendOtp = () => {
-    if (!name.trim()) { setError('Please enter your name'); return; }
-    if (phone.length < 10) { setError('Please enter a valid phone number'); return; }
+  const handleSubmit = async () => {
     setError('');
-    setStep('otp');
-  };
+    
+    if (!email.includes('@')) { setError('Please enter a valid email'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
 
-  const handleVerify = async () => {
-    if (otp.length < 4) { setError('Please enter the 4-digit OTP'); return; }
-    setError('');
-    // Simulated: any 4-digit OTP works
-    await login(phone, name.trim(), selectedRole);
+    try {
+      if (mode === 'signup') {
+        if (!name.trim()) { setError('Please enter your name'); return; }
+        await signup(email.trim(), password, name.trim(), selectedRole);
+      } else {
+        await login(email.trim(), password);
+      }
+    } catch (e: any) {
+      // Clean up Firebase error messages
+      const msg = e.message.replace('Firebase: ', '').replace(/\(auth.*\)\.?/, '').trim();
+      setError(msg || 'Authentication failed. Please try again.');
+    }
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg.primary} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* Logo / Hero */}
           <View style={styles.hero}>
@@ -71,122 +75,87 @@ export default function LoginScreen() {
             <Text style={styles.tagline}>Pakistan's smartest service marketplace</Text>
           </View>
 
-          {step === 'details' ? (
-            <>
-              {/* Name */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Your name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. Ahmed Ali"
-                  placeholderTextColor={COLORS.placeholder}
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                />
-              </View>
-
-              {/* Phone */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Phone number</Text>
-                <View style={styles.phoneRow}>
-                  <View style={styles.countryCode}>
-                    <Text style={styles.countryCodeText}>🇵🇰 +92</Text>
-                  </View>
-                  <TextInput
-                    style={[styles.input, styles.phoneInput]}
-                    placeholder="3xx-xxxxxxx"
-                    placeholderTextColor={COLORS.placeholder}
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    maxLength={11}
-                    returnKeyType="next"
-                  />
-                </View>
-              </View>
-
-              {/* Role selection */}
-              <View style={styles.field}>
-                <Text style={styles.label}>I want to...</Text>
-                {ROLE_OPTIONS.map(opt => (
-                  <Pressable
-                    key={opt.role}
-                    style={[styles.roleCard, selectedRole === opt.role && styles.roleCardSelected]}
-                    onPress={() => setSelectedRole(opt.role)}
-                  >
-                    <Text style={styles.roleIcon}>{opt.icon}</Text>
-                    <View style={styles.roleText}>
-                      <Text style={[styles.roleTitle, selectedRole === opt.role && styles.roleTitleSelected]}>
-                        {opt.title}
-                      </Text>
-                      <Text style={styles.roleSubtitle}>{opt.subtitle}</Text>
-                    </View>
-                    <View style={[styles.radioOuter, selectedRole === opt.role && styles.radioOuterSelected]}>
-                      {selectedRole === opt.role && <View style={styles.radioInner} />}
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-
-              <Pressable style={styles.primaryBtn} onPress={handleSendOtp}>
-                <Text style={styles.primaryBtnText}>Send OTP →</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              {/* OTP step */}
-              <View style={styles.otpHeader}>
-                <Text style={styles.otpTitle}>Enter verification code</Text>
-                <Text style={styles.otpSubtitle}>
-                  Sent to +92 {phone} {'\n'}(For demo: enter any 4 digits)
-                </Text>
-              </View>
-
-              <View style={styles.field}>
-                <TextInput
-                  style={[styles.input, styles.otpInput]}
-                  placeholder="• • • •"
-                  placeholderTextColor={COLORS.placeholder}
-                  value={otp}
-                  onChangeText={setOtp}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  textAlign="center"
-                />
-              </View>
-
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-
-              <Pressable style={styles.primaryBtn} onPress={handleVerify} disabled={isLoading}>
-                {isLoading
-                  ? <ActivityIndicator color={COLORS.text.inverse} />
-                  : <Text style={styles.primaryBtnText}>Verify & Continue →</Text>
-                }
-              </Pressable>
-
-              <Pressable onPress={() => { setStep('details'); setOtp(''); setError(''); }}>
-                <Text style={styles.backLink}>← Change number</Text>
-              </Pressable>
-            </>
+          {mode === 'signup' && (
+            <View style={styles.field}>
+              <Text style={styles.label}>Your name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Ahmed Ali"
+                placeholderTextColor={COLORS.placeholder}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+            </View>
           )}
 
-          {/* Demo shortcut */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
+          <View style={styles.field}>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="name@example.com"
+              placeholderTextColor={COLORS.placeholder}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="next"
+            />
           </View>
 
-          <Pressable
-            style={styles.demoBtn}
-            onPress={() => login('3001234567', 'Demo User', selectedRole)}
+          <View style={styles.field}>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor={COLORS.placeholder}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              returnKeyType="done"
+            />
+          </View>
+
+          {mode === 'signup' && (
+            <View style={styles.field}>
+              <Text style={styles.label}>I want to...</Text>
+              {ROLE_OPTIONS.map(opt => (
+                <Pressable
+                  key={opt.role}
+                  style={[styles.roleCard, selectedRole === opt.role && styles.roleCardSelected]}
+                  onPress={() => setSelectedRole(opt.role)}
+                >
+                  <Text style={styles.roleIcon}>{opt.icon}</Text>
+                  <View style={styles.roleText}>
+                    <Text style={[styles.roleTitle, selectedRole === opt.role && styles.roleTitleSelected]}>
+                      {opt.title}
+                    </Text>
+                    <Text style={styles.roleSubtitle}>{opt.subtitle}</Text>
+                  </View>
+                  <View style={[styles.radioOuter, selectedRole === opt.role && styles.radioOuterSelected]}>
+                    {selectedRole === opt.role && <View style={styles.radioInner} />}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <Pressable style={styles.primaryBtn} onPress={handleSubmit} disabled={isLoading}>
+            {isLoading
+              ? <ActivityIndicator color={COLORS.text.inverse} />
+              : <Text style={styles.primaryBtnText}>{mode === 'signup' ? 'Create Account' : 'Log In'}</Text>
+            }
+          </Pressable>
+
+          <Pressable 
+            style={styles.toggleBtn} 
+            onPress={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(''); }}
           >
-            <Text style={styles.demoBtnText}>
-              {selectedRole === 'provider' ? '🔧 Continue as Demo Provider' : '🏠 Continue as Demo User'}
+            <Text style={styles.toggleText}>
+              {mode === 'signup' ? 'Already have an account? Log In' : "Don't have an account? Sign Up"}
             </Text>
           </Pressable>
 
@@ -232,15 +201,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
     fontSize: FONT.size.md, color: COLORS.text.primary,
   },
-  phoneRow: { flexDirection: 'row', gap: SPACING.sm },
-  countryCode: {
-    backgroundColor: COLORS.bg.secondary,
-    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.md,
-    justifyContent: 'center',
-  },
-  countryCodeText: { fontSize: FONT.size.md, color: COLORS.text.primary, fontWeight: FONT.weight.medium },
-  phoneInput: { flex: 1 },
 
   roleCard: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
@@ -278,23 +238,14 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: COLORS.text.inverse, fontSize: FONT.size.lg, fontWeight: FONT.weight.bold },
 
-  otpHeader: { alignItems: 'center', marginBottom: SPACING.xl },
-  otpTitle: { fontSize: FONT.size.xl, fontWeight: FONT.weight.bold, color: COLORS.text.primary },
-  otpSubtitle: { fontSize: FONT.size.sm, color: COLORS.text.secondary, textAlign: 'center', marginTop: SPACING.sm, lineHeight: 20 },
-  otpInput: { fontSize: FONT.size.xxl, fontWeight: FONT.weight.bold, letterSpacing: 12, textAlign: 'center' },
-
-  backLink: {
-    textAlign: 'center', color: COLORS.text.brand ?? COLORS.brand.primary,
-    fontSize: FONT.size.sm, marginTop: SPACING.lg,
+  toggleBtn: {
+    marginTop: SPACING.xl,
+    alignItems: 'center',
+    padding: SPACING.sm,
   },
-
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.xl, gap: SPACING.md },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { color: COLORS.text.tertiary, fontSize: FONT.size.sm },
-
-  demoBtn: {
-    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.brand.primary,
-    paddingVertical: SPACING.lg, alignItems: 'center', marginBottom: SPACING.xl,
+  toggleText: {
+    color: COLORS.text.brand ?? COLORS.brand.primary,
+    fontSize: FONT.size.sm,
+    fontWeight: FONT.weight.semibold,
   },
-  demoBtnText: { color: COLORS.brand.primary, fontSize: FONT.size.md, fontWeight: FONT.weight.semibold },
 });
