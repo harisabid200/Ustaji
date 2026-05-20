@@ -212,16 +212,16 @@ app.get('/api/bookings/:id', async (req, res) => {
   res.json(booking);
 });
 
-app.post('/api/bookings/:id/cancel', (req, res) => {
-  const ok = updateBookingStatus(req.params.id, 'cancelled');
+app.post('/api/bookings/:id/cancel', async (req, res) => {
+  const ok = await updateBookingStatus(req.params.id, 'cancelled');
   if (!ok) return res.status(404).json({ error: 'Booking not found' });
   res.json({ success: true, status: 'cancelled' });
 });
 
-app.post('/api/bookings/:id/delay', validate(DelaySchema), (req, res) => {
+app.post('/api/bookings/:id/delay', validate(DelaySchema), async (req, res) => {
   const { delay_minutes, reason } = req.body;
   try {
-    const result = reportDelay(req.params.id as string, delay_minutes, reason || 'Provider running late');
+    const result = await reportDelay(req.params.id as string, delay_minutes, reason || 'Provider running late');
     res.json({
       success: true,
       message: result.nextBookingId
@@ -234,9 +234,9 @@ app.post('/api/bookings/:id/delay', validate(DelaySchema), (req, res) => {
   }
 });
 
-app.put('/api/bookings/:id/status', validate(BookingStatusSchema), (req, res) => {
+app.put('/api/bookings/:id/status', validate(BookingStatusSchema), async (req, res) => {
   const { status } = req.body;
-  const ok = updateBookingStatus(req.params.id as string, status);
+  const ok = await updateBookingStatus(req.params.id as string, status);
   if (!ok) return res.status(404).json({ error: 'Booking not found' });
   res.json({ success: true, status });
 });
@@ -253,25 +253,67 @@ app.get('/api/provider/dashboard', asyncHandler(async (req, res) => {
   const provider = provider_id ? getProviderById(provider_id as string) : mockProviders[0];
   if (!provider) return res.status(404).json({ error: 'Provider not found' });
 
+  // Query real bookings for this provider from Firestore
+  const allBookings = await getAllBookings('*');
+  const providerBookings = allBookings.filter(b => b.provider_id === provider.id);
+  const today = new Date().toISOString().split('T')[0];
+  const todayBookings = providerBookings.filter(b => b.scheduled_time?.startsWith(today));
+  const completedToday = todayBookings.filter(b => ['completed', 'rated'].includes(b.status)).length;
+  const earningsToday = todayBookings
+    .filter(b => ['completed', 'rated', 'confirmed', 'in_progress'].includes(b.status))
+    .reduce((sum, b) => sum + (b.price?.quoted || 0), 0);
+
   res.json({
     provider_id: provider.id,
     name: provider.name,
     trust_score: calculateTrustScore(provider),
-    today: { jobs_scheduled: 2, jobs_completed: 1, earnings: 3500 },
+    today: {
+      jobs_scheduled: todayBookings.length,
+      jobs_completed: completedToday,
+      earnings: earningsToday,
+    },
+    total_bookings: providerBookings.length,
     stats: provider.stats,
     is_online: true,
   });
 }));
 
-app.get('/api/provider/opportunities', (_, res) => {
-  res.json({
-    opportunities: [{
-      id: 'opp-1', service_type: 'ac_repair', area: 'G-13',
+app.get('/api/provider/opportunities', asyncHandler(async (req, res) => {
+  const { provider_id } = req.query;
+  const provider = provider_id ? getProviderById(provider_id as string) : mockProviders[0];
+
+  // Surface real pending/confirmed bookings as opportunities
+  const allBookings = await getAllBookings('*');
+  const opportunities = allBookings
+    .filter(b =>
+      ['pending', 'confirmed'].includes(b.status) &&
+      (!provider_id || b.provider_id === provider_id)
+    )
+    .map(b => ({
+      id: b.id,
+      service_type: b.service_type,
+      area: b.location?.area || b.location?.city || 'Islamabad',
+      distance_km: 1.5,
+      estimated_price: b.price?.quoted || 2000,
+      urgency: b.scheduled_time?.includes(new Date().toISOString().split('T')[0]) ? 'Today' : 'Upcoming',
+      time_limit_seconds: 120,
+      match_score: 90,
+      scheduled_time: b.scheduled_time,
+      customer_id: b.user_id,
+    }));
+
+  // If no real bookings, return a sample opportunity for demo
+  if (opportunities.length === 0) {
+    opportunities.push({
+      id: 'opp-demo', service_type: 'ac_repair', area: 'G-13',
       distance_km: 0.8, estimated_price: 3500, urgency: 'Today',
       time_limit_seconds: 120, match_score: 94,
-    }],
-  });
-});
+      scheduled_time: new Date().toISOString(), customer_id: 'demo',
+    });
+  }
+
+  res.json({ opportunities });
+}));
 
 app.post('/api/provider/opportunities/:id/respond', (req, res) => {
   const { accepted } = req.body;

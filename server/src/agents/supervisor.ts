@@ -338,8 +338,8 @@ export async function getAllBookings(userId: string): Promise<Booking[]> {
 }
 export function getSession(id: string): ChatSession | undefined { return getSessionSync(id); }
 
-export function updateBookingStatus(id: string, status: string): boolean {
-  const booking = getBookingSync(id);
+export async function updateBookingStatus(id: string, status: string): Promise<boolean> {
+  const booking = await getBooking(id);
   if (!booking) return false;
   (booking as any).status = status;
   booking.updated_at = new Date().toISOString();
@@ -352,13 +352,13 @@ export function updateBookingStatus(id: string, status: string): boolean {
 /**
  * Provider reports they are running late on the current job.
  */
-export function reportDelay(
+export async function reportDelay(
   currentBookingId: string,
   delayMinutes: number,
   reason: string
-): { currentBookingId: string; nextBookingId: string | null; newScheduledTime: string | null } {
+): Promise<{ currentBookingId: string; nextBookingId: string | null; newScheduledTime: string | null }> {
 
-  const current = getBookingSync(currentBookingId);
+  const current = await getBooking(currentBookingId);
   if (!current) throw new Error('Booking not found');
 
   const now = new Date().toISOString();
@@ -376,8 +376,9 @@ export function reportDelay(
   setBookingSync(currentBookingId, current);
   saveBooking(current).catch(() => {});
 
-  // Find this provider's next upcoming booking (in-memory scan)
-  const providerBookings = getAllBookingsSync('*')
+  // Find this provider's next upcoming booking (with Firestore fallback)
+  const allBookings = await getAllBookings('*');
+  const providerBookings = allBookings
     .filter((b: Booking) =>
       b.provider_id === current.provider_id &&
       b.id !== currentBookingId &&
@@ -428,7 +429,7 @@ export function reportDelay(
 }
 
 export async function addRating(bookingId: string, ratingData: { rating: number; review: string; category_ratings?: Record<string, number> }): Promise<void> {
-  const booking = getBookingSync(bookingId);
+  const booking = await getBooking(bookingId);
   if (!booking) throw new Error('Booking not found');
 
   (booking as any).feedback = {
