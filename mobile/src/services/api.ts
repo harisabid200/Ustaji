@@ -243,6 +243,19 @@ class ApiService {
     } catch { return null; }
   }
 
+  async setOnlineStatus(providerId: string, isOnline: boolean): Promise<void> {
+    try {
+      await this.fetchWithTimeout(
+        `${this.baseUrl}/provider/status`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider_id: providerId, is_online: isOnline }),
+        },
+      );
+    } catch { /* Non-critical — local state still updates */ }
+  }
+
   async getOpportunities(providerId: string): Promise<any[]> {
     try {
       const response = await this.fetchWithTimeout(`${this.baseUrl}/provider/opportunities?provider_id=${providerId}`);
@@ -252,18 +265,29 @@ class ApiService {
     } catch { return []; }
   }
 
-  async respondToOpportunity(opportunityId: string, accept: boolean): Promise<void> {
+  async respondToOpportunity(opportunityId: string, accept: boolean, providerId?: string): Promise<any> {
     const response = await this.fetchWithTimeout(
       `${this.baseUrl}/provider/opportunities/${opportunityId}/respond`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accepted: accept }),
+        body: JSON.stringify({ accepted: accept, provider_id: providerId }),
       },
     );
     if (!response.ok) throw new Error('Failed to respond to opportunity');
+    return response.json();
+  }
+
+  async getProviderBookings(providerId: string): Promise<any[]> {
+    try {
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/provider/bookings?provider_id=${providerId}`);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.bookings || [];
+    } catch { return []; }
   }
 }
 
 export const apiService = new ApiService(BASE_URL);
 export type { ChatApiResponse };
+

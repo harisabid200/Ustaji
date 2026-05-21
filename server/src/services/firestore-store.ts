@@ -99,6 +99,56 @@ export function getAllBookingsSync(userId: string): Booking[] {
   return Array.from(_bookings.values()).filter(b => b.user_id === userId);
 }
 
+/**
+ * Fetch ALL bookings across all users — used by provider opportunity feed.
+ * Uses Firestore collection scan when Firebase is available,
+ * falls back to in-memory map for local dev.
+ */
+export async function fetchAllBookings(): Promise<Booking[]> {
+  if (isFirebaseAvailable()) {
+    try {
+      const snap = await getDB()
+        .collection('bookings')
+        .orderBy('created_at', 'desc')
+        .limit(200) // safety cap
+        .get();
+      const firestoreBookings = snap.docs.map(d => d.data() as Booking);
+      // Merge with in-memory (catches bookings created in this server session but not yet saved)
+      const inMemIds = new Set(firestoreBookings.map(b => b.id));
+      const inMemOnly = Array.from(_bookings.values()).filter(b => !inMemIds.has(b.id));
+      return [...firestoreBookings, ...inMemOnly];
+    } catch (e: any) {
+      console.warn('fetchAllBookings Firestore error, falling back to in-memory:', e.message);
+    }
+  }
+  return Array.from(_bookings.values());
+}
+
+/**
+ * Fetch all bookings for a specific provider (by provider_id field).
+ */
+export async function fetchProviderBookings(providerId: string): Promise<Booking[]> {
+  if (isFirebaseAvailable()) {
+    try {
+      const snap = await getDB()
+        .collection('bookings')
+        .where('provider_id', '==', providerId)
+        .orderBy('created_at', 'desc')
+        .get();
+      const firestoreBookings = snap.docs.map(d => d.data() as Booking);
+      const inMemIds = new Set(firestoreBookings.map(b => b.id));
+      const inMemOnly = Array.from(_bookings.values()).filter(
+        b => b.provider_id === providerId && !inMemIds.has(b.id)
+      );
+      return [...firestoreBookings, ...inMemOnly];
+    } catch (e: any) {
+      console.warn('fetchProviderBookings Firestore error:', e.message);
+    }
+  }
+  return Array.from(_bookings.values()).filter(b => b.provider_id === providerId);
+}
+
+
 // ── Scheduling queries ─────────────────────────────────────────
 
 /**

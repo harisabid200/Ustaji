@@ -1,5 +1,5 @@
 // ProviderTabs — Bottom tab navigator for the provider role
-// Tabs: Dashboard, Opportunities, Schedule, Earnings
+// Tabs: Dashboard, Jobs, Schedule, Earnings, Settings (with logout)
 // Mobile-design skill: safe area, min 48dp targets, active indicator
 
 import React from 'react';
@@ -11,6 +11,7 @@ import ProviderDashboardScreen from '../screens/provider/ProviderDashboardScreen
 import OpportunityScreen from '../screens/provider/OpportunityScreen';
 import ProviderScheduleScreen from '../screens/provider/ProviderScheduleScreen';
 import ProviderEarningsScreen from '../screens/provider/ProviderEarningsScreen';
+import ProviderSettingsScreen from '../screens/provider/ProviderSettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -48,7 +49,7 @@ export default function ProviderTabs() {
         name="Dashboard"
         component={ProviderDashboardScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📊" label="Dashboard" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon emoji="📊" label="Home" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -72,6 +73,13 @@ export default function ProviderTabs() {
           tabBarIcon: ({ focused }) => <TabIcon emoji="💰" label="Earnings" focused={focused} />,
         }}
       />
+      <Tab.Screen
+        name="Settings"
+        component={ProviderSettingsScreen}
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon emoji="👤" label="Profile" focused={focused} />,
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -89,12 +97,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    paddingHorizontal: SPACING.sm,
-    width: 64,
+    paddingHorizontal: SPACING.xs,
+    minWidth: 56,
     minHeight: 48,
   },
   indicator: {
-    width: 24,
+    width: 20,
     height: 3,
     borderRadius: RADIUS.full,
     backgroundColor: 'transparent',
@@ -104,14 +112,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brand.primary,
   },
   tabEmoji: {
-    fontSize: 22,
+    fontSize: 20,
     opacity: 0.55,
   },
   tabEmojiFocused: {
     opacity: 1,
   },
   tabLabel: {
-    fontSize: FONT.size.xs,
+    fontSize: 10,
     color: COLORS.text.tertiary,
     fontWeight: FONT.weight.medium,
   },

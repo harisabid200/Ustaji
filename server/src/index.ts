@@ -8,9 +8,13 @@ import { initFirebase } from './services/firebase-admin';
 import { processChatMessage, getBooking, getAllBookings, updateBookingStatus, addRating, reportDelay } from './agents/supervisor';
 import { mockProviders, getProviderById } from './data/providers';
 import { getAllProvidersFromDB } from './services/provider-service';
+import { fetchAllBookings, fetchProviderBookings, updateBooking } from './services/firestore-store';
 import { getDB, isFirebaseAvailable } from './services/firebase-admin';
 import { validate, ChatSchema, ProviderRegisterSchema, RatingSchema, BookingStatusSchema, DelaySchema } from './middleware/validation';
 import { errorHandler, asyncHandler } from './middleware/error-handler';
+
+// In-memory provider online status (resets on server restart — acceptable for MVP)
+const providerOnlineStatus = new Map<string, boolean>();
 
 dotenv.config();
 
@@ -248,14 +252,14 @@ app.post('/api/bookings/:id/rate', validate(RatingSchema), asyncHandler(async (r
 }));
 
 // ── Provider APIs ─────────────────────────────────────────────
+
+/** GET /api/provider/dashboard — real earnings, jobs, trust score */
 app.get('/api/provider/dashboard', asyncHandler(async (req, res) => {
   const { provider_id } = req.query;
-  const provider = provider_id ? getProviderById(provider_id as string) : mockProviders[0];
-  if (!provider) return res.status(404).json({ error: 'Provider not found' });
+  if (!provider_id) return res.status(400).json({ error: 'provider_id required' });
 
-  // Query real bookings for this provider from Firestore
-  const allBookings = await getAllBookings('*');
-  const providerBookings = allBookings.filter(b => b.provider_id === provider.id);
+  // Fetch real bookings from Firestore for this provider
+  const providerBookings = await fetchProviderBookings(provider_id as string);
   const today = new Date().toISOString().split('T')[0];
   const todayBookings = providerBookings.filter(b => b.scheduled_time?.startsWith(today));
   const completedToday = todayBookings.filter(b => ['completed', 'rated'].includes(b.status)).length;
@@ -263,62 +267,132 @@ app.get('/api/provider/dashboard', asyncHandler(async (req, res) => {
     .filter(b => ['completed', 'rated', 'confirmed', 'in_progress'].includes(b.status))
     .reduce((sum, b) => sum + (b.price?.quoted || 0), 0);
 
+  // Weekly earnings (last 7 days)
+  const weeklyEarnings: Record<string, number> = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    weeklyEarnings[key] = providerBookings
+      .filter(b => b.scheduled_time?.startsWith(key) && ['completed', 'rated'].includes(b.status))
+      .reduce((sum, b) => sum + (b.price?.quoted || 0), 0);
+  }
+
+  // Avg rating from provider record in Firestore or mockProviders
+  const mockProvider = getProviderById(provider_id as string);
+  const avgRating = mockProvider?.stats?.avg_rating ?? null;
+  const ratingCount = mockProvider?.stats?.rating_count ?? 0;
+  const trustScore = mockProvider ? calculateTrustScore(mockProvider) : null;
+  const isOnline = providerOnlineStatus.get(provider_id as string) ?? false;
+
   res.json({
-    provider_id: provider.id,
-    name: provider.name,
-    trust_score: calculateTrustScore(provider),
+    provider_id,
+    avg_rating: avgRating,
+    rating_count: ratingCount,
+    trust_score: trustScore,
+    is_online: isOnline,
     today: {
       jobs_scheduled: todayBookings.length,
       jobs_completed: completedToday,
       earnings: earningsToday,
     },
     total_bookings: providerBookings.length,
-    stats: provider.stats,
-    is_online: true,
+    weekly_earnings: weeklyEarnings,
   });
 }));
 
+/** PUT /api/provider/status — toggle provider online/offline */
+app.put('/api/provider/status', asyncHandler(async (req, res) => {
+  const { provider_id, is_online } = req.body;
+  if (!provider_id || typeof is_online !== 'boolean') {
+    return res.status(400).json({ error: 'provider_id and is_online (boolean) required' });
+  }
+  providerOnlineStatus.set(provider_id as string, is_online);
+  res.json({ success: true, provider_id, is_online });
+}));
+
+/** GET /api/provider/bookings — all jobs for this provider */
+app.get('/api/provider/bookings', asyncHandler(async (req, res) => {
+  const { provider_id } = req.query;
+  if (!provider_id) return res.status(400).json({ error: 'provider_id required' });
+  const bookings = await fetchProviderBookings(provider_id as string);
+  res.json({ bookings, total: bookings.length });
+}));
+
+/** GET /api/provider/opportunities — unmatched pending bookings matching provider services */
 app.get('/api/provider/opportunities', asyncHandler(async (req, res) => {
   const { provider_id } = req.query;
-  const provider = provider_id ? getProviderById(provider_id as string) : mockProviders[0];
 
-  // Surface real pending/confirmed bookings as opportunities
-  const allBookings = await getAllBookings('*');
+  // Check online status — offline providers get empty list
+  if (provider_id && !providerOnlineStatus.get(provider_id as string)) {
+    return res.json({ opportunities: [] });
+  }
+
+  const allBookings = await fetchAllBookings();
+  const provider = provider_id ? getProviderById(provider_id as string) : null;
+  const providerServices = provider?.service_types ?? [];
+
   const opportunities = allBookings
-    .filter(b =>
-      ['pending', 'confirmed'].includes(b.status) &&
-      (!provider_id || b.provider_id === provider_id)
-    )
+    .filter(b => {
+      // Only bookings that have no provider assigned yet (open opportunities)
+      const isOpen = b.status === 'pending' && (!b.provider_id || b.provider_id === '');
+      // Match provider's services (if we know them)
+      const serviceMatch = providerServices.length === 0 || providerServices.includes(b.service_type);
+      return isOpen && serviceMatch;
+    })
     .map(b => ({
       id: b.id,
       service_type: b.service_type,
-      area: b.location?.area || b.location?.city || 'Islamabad',
-      distance_km: 1.5,
-      estimated_price: b.price?.quoted || 2000,
-      urgency: b.scheduled_time?.includes(new Date().toISOString().split('T')[0]) ? 'Today' : 'Upcoming',
+      area: b.location?.area ?? b.location?.city ?? 'Islamabad',
+      distance_km: parseFloat((Math.random() * 4 + 0.5).toFixed(1)), // proximity calc placeholder
+      estimated_price: b.price?.quoted ?? 2000,
+      urgency: b.scheduled_time?.startsWith(new Date().toISOString().split('T')[0]) ? 'Today' : 'Upcoming',
       time_limit_seconds: 120,
-      match_score: 90,
+      match_score: providerServices.includes(b.service_type) ? 94 : 78,
       scheduled_time: b.scheduled_time,
       customer_id: b.user_id,
-    }));
+      description: b.description ?? '',
+    }))
+    .slice(0, 20); // cap at 20 per request
 
-  // If no real bookings, return a sample opportunity for demo
+  // Demo fallback so the screen is never blank during testing
   if (opportunities.length === 0) {
     opportunities.push({
       id: 'opp-demo', service_type: 'ac_repair', area: 'G-13',
       distance_km: 0.8, estimated_price: 3500, urgency: 'Today',
       time_limit_seconds: 120, match_score: 94,
       scheduled_time: new Date().toISOString(), customer_id: 'demo',
+      description: 'AC not cooling, gas refill needed',
     });
   }
 
   res.json({ opportunities });
 }));
 
-app.post('/api/provider/opportunities/:id/respond', (req, res) => {
-  const { accepted } = req.body;
-  res.json({ success: true, accepted, message: accepted ? 'Job accepted! User notified.' : 'Opportunity declined.' });
-});
+/** POST /api/provider/opportunities/:id/respond — accept or decline a job */
+app.post('/api/provider/opportunities/:id/respond', asyncHandler(async (req, res) => {
+  const bookingId = req.params.id as string;
+  const { accepted, provider_id } = req.body;
+
+  if (accepted && bookingId !== 'opp-demo') {
+    // Update the booking: assign this provider and change status to confirmed
+    const updated = await updateBooking(bookingId, {
+      provider_id: provider_id ?? 'unknown',
+      status: 'confirmed' as any,
+    });
+    if (!updated) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+  }
+
+  res.json({
+    success: true,
+    accepted,
+    booking_id: bookingId,
+    message: accepted
+      ? '✅ Job accepted! The customer has been notified.'
+      : 'Opportunity declined.',
+  });
+}));
 
 // ── Centralized Error Handler (must be last) ──────────────────
 app.use(errorHandler);

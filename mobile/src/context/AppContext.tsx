@@ -59,10 +59,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const roleData = await AsyncStorage.getItem(`@role_${firebaseUser.uid}`);
         const nameData = await AsyncStorage.getItem(`@name_${firebaseUser.uid}`);
         const isNewData = await AsyncStorage.getItem(`@new_${firebaseUser.uid}`);
+        const profileData = await AsyncStorage.getItem(`@profile_${firebaseUser.uid}`);
         
         const role = (roleData as UserRole) || 'user';
         const name = nameData || firebaseUser.email?.split('@')[0] || 'User';
         const isNewUser = isNewData === 'true';
+        const providerProfile: ProviderProfile | undefined = profileData ? JSON.parse(profileData) : undefined;
 
         setUser({
           id: firebaseUser.uid,
@@ -70,6 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           email: firebaseUser.email || '',
           role,
           isNewUser,
+          providerProfile,
         });
       } else {
         setUser(null);
@@ -120,8 +123,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    setIsLoading(true);
-    await signOut(auth);
+    try {
+      // Clear API session so next login gets fresh context
+      apiService.resetSession();
+      // signOut triggers onAuthStateChanged → setUser(null) → isAuthenticated = false
+      // Do NOT call setIsLoading(true) here — it causes an indefinite spinner race
+      await signOut(auth);
+    } catch (e) {
+      console.warn('Logout error:', e);
+    }
   }, []);
 
   const switchRole = useCallback(async (role: UserRole) => {
@@ -141,15 +151,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     setUser(prev => prev ? { ...prev, isNewUser: false, providerProfile: profile } : null);
+    // Persist profile so it survives app restarts
     await AsyncStorage.setItem(`@new_${user.id}`, 'false');
+    await AsyncStorage.setItem(`@profile_${user.id}`, JSON.stringify(profile));
     
     try {
+      // Derive city from area string (e.g. "G-13, Islamabad" → city = "Islamabad")
+      const parts = profile.area.split(',').map(s => s.trim());
+      const city = parts.length > 1 ? parts[parts.length - 1] : parts[0];
       await apiService.registerProvider({
         id: user.id,
         name: user.name,
-        phone: user.email, // Backend still expects 'phone' field, map email to it for MVP
+        phone: user.email,
         service_types: profile.serviceTypes,
-        location: { area: profile.area, city: profile.area.includes(',') ? profile.area.split(',')[1].trim() : 'Unknown' },
+        location: { area: profile.area, city },
         experience_years: profile.experienceYears,
         bio: profile.bio,
         rate_card: profile.rateCard,

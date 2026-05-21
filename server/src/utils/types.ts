@@ -236,6 +236,8 @@ export interface Booking {
   actual_start?: string;
   actual_end?: string;
   location: GeoLocation;
+  description?: string;           // User's issue description for opportunity feed
+  customer_name?: string;         // Display name of customer (for provider schedule)
   price: {
     quoted: number;
     final?: number;

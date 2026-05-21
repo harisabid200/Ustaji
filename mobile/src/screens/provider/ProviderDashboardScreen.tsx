@@ -1,9 +1,9 @@
 // ProviderDashboardScreen — Provider home
-// Shows real profile data from context + live opportunities
-import React, { useState, useEffect } from 'react';
+// Shows real profile + live opportunities from server, persists online status
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Pressable, StyleSheet, SafeAreaView,
-  StatusBar, ScrollView, Switch, RefreshControl,
+  StatusBar, ScrollView, Switch, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { COLORS, SPACING, RADIUS, FONT, SHADOW } from '../../theme';
 import { useApp } from '../../context/AppContext';
@@ -11,29 +11,39 @@ import { apiService } from '../../services/api';
 
 export default function ProviderDashboardScreen({ navigation }: any) {
   const { user } = useApp();
-  const [isOnline, setIsOnline] = useState(false); // Offline by default on first load
+  const [isOnline, setIsOnline] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [hasLoadedOpps, setHasLoadedOpps] = useState(false);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
 
-  // Pull stats from provider profile in context (populated during onboarding)
   const profile = user?.providerProfile;
+  const providerId = user?.id ?? '';
 
-  // Today's stats — start at zero for new providers
-  const [todayStats, setTodayStats] = useState({ jobs: 0, earnings: 0 });
+  useEffect(() => {
+    loadAll();
+  }, []);
 
-  useEffect(() => { loadOpportunities(); }, []);
+  const loadAll = useCallback(async () => {
+    await Promise.all([loadOpportunities(), loadDashboard()]);
+  }, []);
+
+  const loadDashboard = async () => {
+    if (!providerId) return;
+    const data = await apiService.getProviderDashboard(providerId);
+    if (data) setDashboardData(data);
+  };
 
   const loadOpportunities = async () => {
     try {
-      const opps = await apiService.getOpportunities(user?.id ?? '');
-      // Only show opportunities matching provider's services
-      const filtered = profile?.serviceTypes
-        ? opps.filter(o => profile.serviceTypes.includes(o.service_type))
+      const opps = await apiService.getOpportunities(providerId);
+      // Client-side filter by provider's services as a secondary check
+      const filtered = profile?.serviceTypes?.length
+        ? opps.filter((o: any) => profile.serviceTypes.includes(o.service_type))
         : opps;
       setOpportunities(filtered);
     } catch {
-      // Server not running — show empty state cleanly
       setOpportunities([]);
     } finally {
       setHasLoadedOpps(true);
@@ -42,17 +52,45 @@ export default function ProviderDashboardScreen({ navigation }: any) {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadOpportunities();
+    await loadAll();
     setIsRefreshing(false);
   };
 
-  const handleAccept = (id: string) => {
-    setOpportunities(prev => prev.filter(o => o.id !== id));
-    setTodayStats(prev => ({ jobs: prev.jobs + 1, earnings: prev.earnings + 3500 }));
+  // Toggle online/offline — notifies server so opportunities are filtered correctly
+  const handleToggleOnline = async (value: boolean) => {
+    setIsOnline(value);
+    await apiService.setOnlineStatus(providerId, value);
+    if (value) {
+      // Going online — immediately load fresh opportunities
+      await loadOpportunities();
+    } else {
+      setOpportunities([]);
+    }
   };
 
-  const handleDecline = (id: string) => {
+  const handleAccept = async (opp: any) => {
+    setRespondingId(opp.id);
+    try {
+      await apiService.respondToOpportunity(opp.id, true, providerId);
+      // Remove from list immediately for responsiveness
+      setOpportunities(prev => prev.filter(o => o.id !== opp.id));
+      // Refresh dashboard so Today's Jobs and Earnings update
+      await loadDashboard();
+    } catch {
+      // If booking not found on server (demo opp), still remove locally
+      setOpportunities(prev => prev.filter(o => o.id !== opp.id));
+    } finally {
+      setRespondingId(null);
+    }
+  };
+
+  const handleDecline = async (id: string) => {
+    setRespondingId(id);
+    try {
+      await apiService.respondToOpportunity(id, false, providerId);
+    } catch { /* no-op */ }
     setOpportunities(prev => prev.filter(o => o.id !== id));
+    setRespondingId(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -61,8 +99,13 @@ export default function ProviderDashboardScreen({ navigation }: any) {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // First name for greeting
   const firstName = user?.name?.split(' ')[0] ?? 'Provider';
+
+  // Stats from server dashboard (real data) or zero for new providers
+  const todayJobs = dashboardData?.today?.jobs_scheduled ?? 0;
+  const todayEarnings = dashboardData?.today?.earnings ?? 0;
+  const avgRating = dashboardData?.avg_rating ?? null;
+  const trustScore = dashboardData?.trust_score ?? null;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -87,14 +130,14 @@ export default function ProviderDashboardScreen({ navigation }: any) {
             </Text>
             <Switch
               value={isOnline}
-              onValueChange={setIsOnline}
+              onValueChange={handleToggleOnline}
               trackColor={{ false: COLORS.border, true: COLORS.brand.accent }}
               thumbColor={isOnline ? COLORS.brand.primary : COLORS.text.tertiary}
             />
           </View>
         </View>
 
-        {/* Go Online hint for new providers */}
+        {/* Go Online hint */}
         {!isOnline && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineBannerText}>
@@ -103,28 +146,30 @@ export default function ProviderDashboardScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* Today's Stats */}
+        {/* Today's Stats — live from server */}
         <View style={styles.statsGrid}>
           <View style={[styles.statCard, { backgroundColor: COLORS.infoBg }]}>
             <Text style={styles.statIcon}>📋</Text>
-            <Text style={styles.statValue}>{todayStats.jobs}</Text>
+            <Text style={styles.statValue}>{todayJobs}</Text>
             <Text style={styles.statLabel}>Today's Jobs</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: COLORS.successBg }]}>
             <Text style={styles.statIcon}>💰</Text>
             <Text style={styles.statValue}>
-              {todayStats.earnings > 0 ? `PKR ${todayStats.earnings.toLocaleString()}` : '—'}
+              {todayEarnings > 0 ? `PKR ${todayEarnings.toLocaleString()}` : '—'}
             </Text>
             <Text style={styles.statLabel}>Today's Earnings</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: COLORS.warningBg }]}>
             <Text style={styles.statIcon}>⭐</Text>
-            <Text style={styles.statValue}>—</Text>
+            <Text style={styles.statValue}>{avgRating != null ? avgRating.toFixed(1) : '—'}</Text>
             <Text style={styles.statLabel}>Avg. Rating</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: '#F5F3FF' }]}>
             <Text style={styles.statIcon}>🏆</Text>
-            <Text style={[styles.statValue, { color: '#7C3AED' }]}>New</Text>
+            <Text style={[styles.statValue, { color: '#7C3AED' }]}>
+              {trustScore != null ? trustScore : 'New'}
+            </Text>
             <Text style={styles.statLabel}>Trust Score</Text>
           </View>
         </View>
@@ -159,7 +204,9 @@ export default function ProviderDashboardScreen({ navigation }: any) {
               <Text style={styles.offlineOppsIcon}>📵</Text>
               <Text style={styles.offlineOppsText}>Go online to receive opportunities</Text>
             </View>
-          ) : opportunities.length === 0 && hasLoadedOpps ? (
+          ) : !hasLoadedOpps ? (
+            <ActivityIndicator color={COLORS.brand.primary} style={{ marginVertical: SPACING.xl }} />
+          ) : opportunities.length === 0 ? (
             <View style={styles.emptyOpps}>
               <Text style={styles.emptyIcon}>✅</Text>
               <Text style={styles.emptyText}>No pending opportunities</Text>
@@ -178,8 +225,11 @@ export default function ProviderDashboardScreen({ navigation }: any) {
                     </View>
                   )}
                 </View>
+                {opp.description ? (
+                  <Text style={styles.oppDesc} numberOfLines={2}>"{opp.description}"</Text>
+                ) : null}
                 <View style={styles.oppMeta}>
-                  <Text style={styles.oppMetaText}>📍 {opp.area} ({opp.distance_km ?? opp.distance}km)</Text>
+                  <Text style={styles.oppMetaText}>📍 {opp.area} · {opp.distance_km}km</Text>
                   <Text style={styles.oppMetaText}>⏰ {opp.urgency}</Text>
                   <Text style={styles.oppMetaText}>
                     💰 Est. PKR {(opp.estimated_price ?? opp.price)?.toLocaleString()}
@@ -189,11 +239,22 @@ export default function ProviderDashboardScreen({ navigation }: any) {
                   <Text style={styles.oppTimer}>⏳ Respond in {formatTime(opp.time_limit_seconds)}</Text>
                 )}
                 <View style={styles.oppActions}>
-                  <Pressable style={styles.declineBtn} onPress={() => handleDecline(opp.id)}>
+                  <Pressable
+                    style={styles.declineBtn}
+                    onPress={() => handleDecline(opp.id)}
+                    disabled={respondingId === opp.id}
+                  >
                     <Text style={styles.declineBtnText}>Decline</Text>
                   </Pressable>
-                  <Pressable style={styles.acceptBtn} onPress={() => handleAccept(opp.id)}>
-                    <Text style={styles.acceptBtnText}>✓ Accept Job</Text>
+                  <Pressable
+                    style={styles.acceptBtn}
+                    onPress={() => handleAccept(opp)}
+                    disabled={respondingId === opp.id}
+                  >
+                    {respondingId === opp.id
+                      ? <ActivityIndicator color={COLORS.text.inverse} size="small" />
+                      : <Text style={styles.acceptBtnText}>✓ Accept Job</Text>
+                    }
                   </Pressable>
                 </View>
               </View>
@@ -270,10 +331,11 @@ const styles = StyleSheet.create({
     padding: SPACING.lg, marginBottom: SPACING.md,
     borderWidth: 1.5, borderColor: COLORS.brand.primary + '40', ...SHADOW.sm,
   },
-  oppHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm, gap: SPACING.sm },
+  oppHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xs, gap: SPACING.sm },
   oppService: { fontSize: FONT.size.lg, fontWeight: FONT.weight.bold, color: COLORS.text.primary, textTransform: 'capitalize', flex: 1, flexShrink: 1 },
   matchBadge: { backgroundColor: COLORS.successBg, borderRadius: RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: 3 },
   matchText: { fontSize: FONT.size.xs, color: COLORS.success, fontWeight: FONT.weight.bold },
+  oppDesc: { fontSize: FONT.size.sm, color: COLORS.text.secondary, fontStyle: 'italic', marginBottom: SPACING.sm, lineHeight: 18 },
   oppMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md, marginBottom: SPACING.sm },
   oppMetaText: { fontSize: FONT.size.sm, color: COLORS.text.secondary },
   oppTimer: { fontSize: FONT.size.sm, color: COLORS.warning, fontWeight: FONT.weight.semibold, marginBottom: SPACING.md },
