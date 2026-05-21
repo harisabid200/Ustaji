@@ -218,9 +218,12 @@ export default function CategoryScreen({ route, navigation }: any) {
       <View style={styles.floatingCta}>
         <Pressable
           style={styles.floatingBtn}
-          onPress={() => navigation.navigate('Chat', {
-            prefillMessage: `I'm looking for ${category.name} services`,
-            category: category.id,
+          onPress={() => navigation.navigate('UserMain', {
+            screen: 'Chat',
+            params: {
+              prefillMessage: `I'm looking for ${category.name} services`,
+              category: category.id,
+            },
           })}
         >
           <Text style={styles.floatingBtnIcon}>💬</Text>

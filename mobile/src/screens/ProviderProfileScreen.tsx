@@ -117,8 +117,11 @@ export default function ProviderProfileScreen({ route, navigation }: any) {
         <View style={styles.bookingSection}>
           <Pressable
             style={styles.bookBtn}
-            onPress={() => navigation.navigate('Chat', {
-              prefillMessage: `I want to book ${provider.name} for ${provider.service_types?.[0]?.replace(/_/g, ' ')}`,
+            onPress={() => navigation.navigate('UserMain', {
+              screen: 'Chat',
+              params: {
+                prefillMessage: `I want to book ${provider.name} for ${provider.service_types?.[0]?.replace(/_/g, ' ')}`,
+              },
             })}
           >
             <Text style={styles.bookBtnText}>📅 Book via Chat</Text>
