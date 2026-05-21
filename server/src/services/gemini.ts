@@ -46,13 +46,13 @@ export function initGemini(): void {
   try {
     genAI = new GoogleGenerativeAI(API_KEY);
     model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',   // Free tier: 15 RPM, 1500 RPD, 1M TPM (vs 2.5-flash: 10 RPM, 500 RPD)
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 1024,
       },
     });
-    console.log('✅ Gemini initialized with gemini-2.5-flash');
+    console.log('✅ Gemini initialized with gemini-1.5-flash');
   } catch (e: any) {
     console.error('❌ Gemini init failed:', e.message);
   }
