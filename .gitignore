@@ -17,6 +17,9 @@ list-models.ps1
 check-firestore.ts
 test-gemini.ts
 seed-providers.js
+seed-*.ts
+seed-*.js
+find-user.ts
 *.ps1
 server_test.log
 
